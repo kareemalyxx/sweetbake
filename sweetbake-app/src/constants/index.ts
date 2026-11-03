@@ -26,3 +26,13 @@ export const CAKE_FLAVORS = [
   'Spiced Carrot Cake',
 ];
 
+export const CAKE_ADDONS = [
+  'Custom Acrylic Topper',
+  'Fresh Edible Flowers',
+  'Edible Photo Print',
+  'Gold Leaf Accents',
+  'Macaron Toppings',
+  'Glitter Candle Pack',
+  'Mini Alcohol Bottle',
+];
+

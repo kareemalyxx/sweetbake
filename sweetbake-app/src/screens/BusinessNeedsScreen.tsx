@@ -66,6 +66,8 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         return 'cube' as const;
       case 'Tools':
         return 'construct' as const;
+      case 'Add-ons':
+        return 'sparkles' as const;
     }
   };
 
@@ -73,7 +75,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
     <View style={styles.container}>
       {/* Category Tabs */}
       <View style={styles.categoryRow}>
-        {(['Ingredients', 'Packaging', 'Tools'] as RequirementCategory[]).map((cat) => {
+        {(['Ingredients', 'Packaging', 'Tools', 'Add-ons'] as RequirementCategory[]).map((cat) => {
           const isSelected = selectedCategory === cat;
           const pendingCount = requirements.filter(
             (r) => r.category === cat && !r.isCompleted

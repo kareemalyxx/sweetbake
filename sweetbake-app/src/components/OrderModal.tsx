@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { CakeOrder, OrderStatus } from '../types';
 import { Theme } from '../theme';
-import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS } from '../constants';
+import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
 import { StorageService } from '../services/storage';
 import { triggerHaptic } from '../services/haptics';
 
@@ -40,6 +40,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [cakeType, setCakeType] = useState(CAKE_TYPES[0]);
   const [shape, setShape] = useState(CAKE_SHAPES[0]);
   const [flavor, setFlavor] = useState(CAKE_FLAVORS[0]);
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [status, setStatus] = useState<OrderStatus>('Pending');
   const [priceStr, setPriceStr] = useState('85');
   const [customRequirements, setCustomRequirements] = useState('');
@@ -58,6 +59,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [availableFlavors, setAvailableFlavors] = useState<string[]>(CAKE_FLAVORS);
   const [availableCakeTypes, setAvailableCakeTypes] = useState<string[]>(CAKE_TYPES);
   const [availableShapes, setAvailableShapes] = useState<string[]>(CAKE_SHAPES);
+  const [availableAddons, setAvailableAddons] = useState<string[]>(CAKE_ADDONS);
 
   // Add new item prompt states
   const [newFlavorInput, setNewFlavorInput] = useState('');
@@ -69,9 +71,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [newShapeInput, setNewShapeInput] = useState('');
   const [showAddShape, setShowAddShape] = useState(false);
 
+  const [newAddonInput, setNewAddonInput] = useState('');
+  const [showAddAddon, setShowAddAddon] = useState(false);
+
   // Rename modal states
   const [renameTarget, setRenameTarget] = useState<{
-    category: 'Type' | 'Shape' | 'Flavor';
+    category: 'Type' | 'Shape' | 'Flavor' | 'Add-on';
     oldValue: string;
   } | null>(null);
   const [renameInputValue, setRenameInputValue] = useState('');
@@ -81,9 +86,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       const storedFlavors = await StorageService.getFlavors(CAKE_FLAVORS);
       const storedTypes = await StorageService.getCakeTypes(CAKE_TYPES);
       const storedShapes = await StorageService.getCakeShapes(CAKE_SHAPES);
+      const storedAddons = await StorageService.getCakeAddons(CAKE_ADDONS);
       setAvailableFlavors(storedFlavors);
       setAvailableCakeTypes(storedTypes);
       setAvailableShapes(storedShapes);
+      setAvailableAddons(storedAddons);
     };
     loadDynamicOptions();
   }, []);
@@ -95,6 +102,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(orderToEdit.shape);
       setFlavor(orderToEdit.flavor);
       setStatus(orderToEdit.status);
+      setSelectedAddons(orderToEdit.addons || []);
       setPriceStr(String(orderToEdit.quotedPrice));
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
@@ -105,6 +113,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
       setStatus('Pending');
+      setSelectedAddons([]);
       setPriceStr('85');
       setCustomRequirements('');
       setReferenceImages([]);
@@ -200,8 +209,37 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     await StorageService.saveCakeShapes(updated);
   };
 
+  const handleAddNewAddon = async () => {
+    const trimmed = newAddonInput.trim();
+    if (!trimmed) return;
+    if (availableAddons.includes(trimmed)) {
+      if (!selectedAddons.includes(trimmed)) {
+        setSelectedAddons([...selectedAddons, trimmed]);
+      }
+      setNewAddonInput('');
+      setShowAddAddon(false);
+      return;
+    }
+    triggerHaptic.success();
+    const updated = [...availableAddons, trimmed];
+    setAvailableAddons(updated);
+    setSelectedAddons([...selectedAddons, trimmed]);
+    setNewAddonInput('');
+    setShowAddAddon(false);
+    await StorageService.saveCakeAddons(updated);
+  };
+
+  const toggleAddon = (addon: string) => {
+    triggerHaptic.selection();
+    if (selectedAddons.includes(addon)) {
+      setSelectedAddons(selectedAddons.filter((a) => a !== addon));
+    } else {
+      setSelectedAddons([...selectedAddons, addon]);
+    }
+  };
+
   // Open Rename dialog on long press
-  const openRenameModal = (category: 'Type' | 'Shape' | 'Flavor', value: string) => {
+  const openRenameModal = (category: 'Type' | 'Shape' | 'Flavor' | 'Add-on', value: string) => {
     triggerHaptic.heavy();
     setRenameTarget({ category, oldValue: value });
     setRenameInputValue(value);
@@ -234,6 +272,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setAvailableShapes(updated);
       if (shape === oldValue) setShape(trimmed);
       await StorageService.saveCakeShapes(updated);
+    } else if (category === 'Add-on') {
+      const updated = availableAddons.map((item) => (item === oldValue ? trimmed : item));
+      setAvailableAddons(updated);
+      setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? trimmed : a)));
+      await StorageService.saveCakeAddons(updated);
     }
 
     setRenameTarget(null);
@@ -274,6 +317,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       cakeType,
       shape,
       flavor,
+      addons: selectedAddons,
       status,
       quotedPrice: price,
       customRequirements: customRequirements.trim(),
@@ -576,6 +620,65 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+
+              {/* 4. Add-ons (Multi-selection: Topper, Flowers, Pictures, etc.) */}
+              <View style={styles.titleWithAction}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={styles.fieldLabel}>Add-ons (Multi-Select)</Text>
+                  {selectedAddons.length > 0 && (
+                    <View style={styles.addonsCountBadge}>
+                      <Text style={styles.addonsCountText}>{selectedAddons.length} selected</Text>
+                    </View>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => setShowAddAddon(!showAddAddon)}
+                  style={styles.inlineAddBtn}
+                >
+                  <Ionicons name={showAddAddon ? 'close-circle' : 'add-circle'} size={14} color={Theme.colors.deepRose} />
+                  <Text style={styles.inlineAddText}>{showAddAddon ? 'Cancel' : 'Add Add-on'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showAddAddon && (
+                <View style={styles.addItemBox}>
+                  <TextInput
+                    style={styles.addItemInput}
+                    placeholder="New addon (e.g. Edible Butterflies, Sparkler)..."
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    value={newAddonInput}
+                    onChangeText={setNewAddonInput}
+                  />
+                  <TouchableOpacity style={styles.addItemSaveBtn} onPress={handleAddNewAddon}>
+                    <Text style={styles.addItemSaveText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {availableAddons.map((addon) => {
+                  const isSelected = selectedAddons.includes(addon);
+                  return (
+                    <TouchableOpacity
+                      key={addon}
+                      style={[styles.chip, isSelected && styles.chipMultiActive]}
+                      onPress={() => toggleAddon(addon)}
+                      onLongPress={() => openRenameModal('Add-on', addon)}
+                      delayLongPress={450}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={14}
+                        color={isSelected ? '#FFFFFF' : Theme.colors.textSecondary}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {addon}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
             {/* Section 4: Status & Pricing */}
@@ -864,6 +967,22 @@ const styles = StyleSheet.create({
   },
   chipActive: {
     backgroundColor: Theme.colors.deepRose,
+  },
+  chipMultiActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderWidth: 1,
+    borderColor: Theme.colors.deepRose,
+  },
+  addonsCountBadge: {
+    backgroundColor: Theme.colors.blushPink,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: Theme.borderRadius.pill,
+  },
+  addonsCountText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: Theme.colors.deepRose,
   },
   chipText: {
     fontSize: 12,

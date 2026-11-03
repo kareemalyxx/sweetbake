@@ -6,6 +6,7 @@ const REQUIREMENTS_KEY = '@sweetbake_requirements_v1';
 const FLAVORS_KEY = '@sweetbake_flavors_v1';
 const CAKE_TYPES_KEY = '@sweetbake_cake_types_v1';
 const CAKE_SHAPES_KEY = '@sweetbake_cake_shapes_v1';
+const CAKE_ADDONS_KEY = '@sweetbake_cake_addons_v1';
 
 const defaultOrders: CakeOrder[] = [
   {
@@ -179,6 +180,27 @@ export const StorageService = {
       await AsyncStorage.setItem(CAKE_SHAPES_KEY, JSON.stringify(shapes));
     } catch (e) {
       console.error('Failed to save cake shapes', e);
+    }
+  },
+
+  getCakeAddons: async (defaultList: string[]): Promise<string[]> => {
+    try {
+      const data = await AsyncStorage.getItem(CAKE_ADDONS_KEY);
+      if (data) {
+        return JSON.parse(data);
+      }
+      await AsyncStorage.setItem(CAKE_ADDONS_KEY, JSON.stringify(defaultList));
+      return defaultList;
+    } catch {
+      return defaultList;
+    }
+  },
+
+  saveCakeAddons: async (addons: string[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(CAKE_ADDONS_KEY, JSON.stringify(addons));
+    } catch (e) {
+      console.error('Failed to save cake addons', e);
     }
   },
 };

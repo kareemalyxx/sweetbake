@@ -81,6 +81,15 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               </View>
             ) : null}
 
+            {order.addons && order.addons.length > 0 ? (
+              <View style={styles.addonsPill}>
+                <Ionicons name="sparkles" size={10} color={Theme.colors.deepRose} style={{ marginRight: 3 }} />
+                <Text style={styles.addonsText} numberOfLines={1}>
+                  +{order.addons.length} Add-on{order.addons.length > 1 ? 's' : ''}
+                </Text>
+              </View>
+            ) : null}
+
             {order.referenceImages && order.referenceImages.length > 1 && (
               <View style={styles.photoCountBadge}>
                 <Ionicons name="images-outline" size={10} color={Theme.colors.textSecondary} />
@@ -204,6 +213,19 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: Theme.colors.textSecondary,
     fontWeight: '600',
+  },
+  addonsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.blushPink,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: Theme.borderRadius.pill,
+  },
+  addonsText: {
+    fontSize: 11,
+    color: Theme.colors.deepRose,
+    fontWeight: '700',
   },
   photoCountBadge: {
     flexDirection: 'row',

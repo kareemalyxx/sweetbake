@@ -36,37 +36,76 @@ export default function App() {
 
   // Orders State Handlers
   const handleSaveOrder = async (orderData: Partial<CakeOrder>) => {
-    let updated: CakeOrder[];
+    let updatedOrders: CakeOrder[];
+    let targetOrderId = orderData.id;
+
     if (orderData.id) {
       // Edit existing
-      updated = orders.map((o) =>
+      updatedOrders = orders.map((o) =>
         o.id === orderData.id ? ({ ...o, ...orderData } as CakeOrder) : o
       );
     } else {
       // Add new
+      targetOrderId = `ord-${Date.now()}`;
       const newOrder: CakeOrder = {
-        id: `ord-${Date.now()}`,
+        id: targetOrderId,
         customerName: orderData.customerName || 'Anonymous',
         deliveryDate: orderData.deliveryDate || new Date().toISOString(),
         cakeType: orderData.cakeType || 'Celebration Cake',
         shape: orderData.shape || 'Round',
         flavor: orderData.flavor || 'Vanilla Bean & Berry',
+        addons: orderData.addons || [],
         customRequirements: orderData.customRequirements || '',
         status: orderData.status || 'Pending',
         quotedPrice: orderData.quotedPrice || 0,
         referenceImages: orderData.referenceImages || [],
         createdAt: new Date().toISOString(),
       };
-      updated = [newOrder, ...orders];
+      updatedOrders = [newOrder, ...orders];
     }
-    setOrders(updated);
-    await StorageService.saveOrders(updated);
+    setOrders(updatedOrders);
+    await StorageService.saveOrders(updatedOrders);
+
+    // Synchronize Add-ons with Checklist (Business Needs)
+    if (orderData.addons && orderData.addons.length > 0) {
+      const clientName = orderData.customerName || 'Cake Order';
+      let currentReqs = [...requirements];
+
+      for (const addon of orderData.addons) {
+        const itemTitle = `${addon} (for ${clientName})`;
+        // Check if already in requirements
+        const exists = currentReqs.some(
+          (r) => r.category === 'Add-ons' && (r.title === itemTitle || (r.orderId === targetOrderId && r.title.startsWith(addon)))
+        );
+        if (!exists) {
+          const newReq: GeneralRequirement = {
+            id: `addon-req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            title: itemTitle,
+            category: 'Add-ons',
+            isCompleted: false,
+            orderId: targetOrderId,
+            createdAt: new Date().toISOString(),
+          };
+          currentReqs = [newReq, ...currentReqs];
+        }
+      }
+
+      setRequirements(currentReqs);
+      await StorageService.saveRequirements(currentReqs);
+    }
   };
 
   const handleDeleteOrder = async (id: string) => {
     const updated = orders.filter((o) => o.id !== id);
     setOrders(updated);
     await StorageService.saveOrders(updated);
+
+    // Also remove any linked add-on checklist items
+    const updatedReqs = requirements.filter((r) => r.orderId !== id);
+    if (updatedReqs.length !== requirements.length) {
+      setRequirements(updatedReqs);
+      await StorageService.saveRequirements(updatedReqs);
+    }
   };
 
   const handleAdvanceStatus = async (id: string) => {

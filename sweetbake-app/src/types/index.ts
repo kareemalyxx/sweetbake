@@ -7,6 +7,7 @@ export interface CakeOrder {
   cakeType: string;
   shape: string;
   flavor: string;
+  addons?: string[]; // Multiselection for custom addons (Topper, Flowers, Pictures, etc.)
   customRequirements: string;
   status: OrderStatus;
   quotedPrice: number;
@@ -14,13 +15,14 @@ export interface CakeOrder {
   createdAt: string;
 }
 
-export type RequirementCategory = 'Ingredients' | 'Packaging' | 'Tools';
+export type RequirementCategory = 'Ingredients' | 'Packaging' | 'Tools' | 'Add-ons';
 
 export interface GeneralRequirement {
   id: string;
   title: string;
   category: RequirementCategory;
   isCompleted: boolean;
+  orderId?: string; // Optional link to specific cake commission
   createdAt: string;
 }
 
