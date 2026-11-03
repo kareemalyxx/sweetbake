@@ -205,3 +205,4 @@ public struct NeededAddonsWidget: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
+

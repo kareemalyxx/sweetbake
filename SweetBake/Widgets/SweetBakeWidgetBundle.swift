@@ -13,3 +13,4 @@ struct SweetBakeWidgetBundle: WidgetBundle {
         NeededAddonsWidget()
     }
 }
+

@@ -232,3 +232,4 @@ public struct UpcomingOrderWidget: Widget {
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }
+

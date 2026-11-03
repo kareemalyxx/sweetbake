@@ -117,3 +117,4 @@ public enum SweetBakeWidgetStorage {
         return decoded
     }
 }
+
