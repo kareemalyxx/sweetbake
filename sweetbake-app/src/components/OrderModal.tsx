@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -778,7 +779,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 <Text style={styles.renameSubtitle}>
                   Change name from "{renameTarget?.oldValue}":
                 </Text>
-                
+
                 <TextInput
                   style={styles.renameInput}
                   value={renameInputValue}
