@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -12,11 +11,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Switch,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { CakeOrder, OrderStatus } from '../types';
+import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming } from '../types';
 import { Theme } from '../theme';
 import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
 import { StorageService } from '../services/storage';
@@ -29,6 +29,14 @@ interface OrderModalProps {
   onClose: () => void;
   onSave: (order: Partial<CakeOrder>) => void;
 }
+
+const REMINDER_OPTIONS: { label: string; value: ReminderTiming }[] = [
+  { label: 'At event time', value: 'on_time' },
+  { label: '15 min before', value: '15_min' },
+  { label: '1 hour before', value: '1_hour' },
+  { label: '2 hours before', value: '2_hours' },
+  { label: '1 day before', value: '1_day' },
+];
 
 export const OrderModal: React.FC<OrderModalProps> = ({
   visible,
@@ -43,7 +51,19 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [flavor, setFlavor] = useState(CAKE_FLAVORS[0]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [status, setStatus] = useState<OrderStatus>('Pending');
-  const [priceStr, setPriceStr] = useState('85');
+
+  // Fulfillment & Location
+  const [fulfillmentType, setFulfillmentType] = useState<FulfillmentType>('Pickup');
+  const [location, setLocation] = useState('');
+
+  // Financials
+  const [totalPaymentStr, setTotalPaymentStr] = useState('85');
+  const [downPaymentStr, setDownPaymentStr] = useState('0');
+
+  // Reminders
+  const [reminderEnabled, setReminderEnabled] = useState(false);
+  const [reminderTiming, setReminderTiming] = useState<ReminderTiming>('1_hour');
+
   const [customRequirements, setCustomRequirements] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
 
@@ -104,7 +124,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setFlavor(orderToEdit.flavor);
       setStatus(orderToEdit.status);
       setSelectedAddons(orderToEdit.addons || []);
-      setPriceStr(String(orderToEdit.quotedPrice));
+      setTotalPaymentStr(String(orderToEdit.quotedPrice ?? 85));
+      setDownPaymentStr(String(orderToEdit.downPayment ?? 0));
+      setFulfillmentType(orderToEdit.fulfillmentType || 'Pickup');
+      setLocation(orderToEdit.location || '');
+      setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
+      setReminderTiming(orderToEdit.reminderTiming || '1_hour');
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
@@ -115,7 +140,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
       setStatus('Pending');
       setSelectedAddons([]);
-      setPriceStr('85');
+      setTotalPaymentStr('85');
+      setDownPaymentStr('0');
+      setFulfillmentType('Pickup');
+      setLocation('');
+      setReminderEnabled(false);
+      setReminderTiming('1_hour');
       setCustomRequirements('');
       setReferenceImages([]);
 
@@ -126,6 +156,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setShowDatePicker(false);
     setShowTimePicker(false);
   }, [orderToEdit, initialDate, visible]);
+
+  // Calculated remaining payment
+  const totalVal = Math.max(0, parseFloat(totalPaymentStr) || 0);
+  const downVal = Math.max(0, parseFloat(downPaymentStr) || 0);
+  const remainingVal = Math.max(0, totalVal - downVal);
 
   // Handle native Date change
   const onDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
@@ -249,34 +284,36 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   // Confirm Rename action
   const confirmRename = async () => {
     if (!renameTarget) return;
-    const trimmed = renameInputValue.trim();
-    if (!trimmed || trimmed === renameTarget.oldValue) {
+    const newVal = renameInputValue.trim();
+    if (!newVal || newVal === renameTarget.oldValue) {
       setRenameTarget(null);
       return;
     }
 
-    triggerHaptic.success();
     const { category, oldValue } = renameTarget;
+    triggerHaptic.success();
 
     if (category === 'Flavor') {
-      const updated = availableFlavors.map((item) => (item === oldValue ? trimmed : item));
+      const updated = availableFlavors.map((f) => (f === oldValue ? newVal : f));
       setAvailableFlavors(updated);
-      if (flavor === oldValue) setFlavor(trimmed);
+      if (flavor === oldValue) setFlavor(newVal);
       await StorageService.saveFlavors(updated);
     } else if (category === 'Type') {
-      const updated = availableCakeTypes.map((item) => (item === oldValue ? trimmed : item));
+      const updated = availableCakeTypes.map((t) => (t === oldValue ? newVal : t));
       setAvailableCakeTypes(updated);
-      if (cakeType === oldValue) setCakeType(trimmed);
+      if (cakeType === oldValue) setCakeType(newVal);
       await StorageService.saveCakeTypes(updated);
     } else if (category === 'Shape') {
-      const updated = availableShapes.map((item) => (item === oldValue ? trimmed : item));
+      const updated = availableShapes.map((s) => (s === oldValue ? newVal : s));
       setAvailableShapes(updated);
-      if (shape === oldValue) setShape(trimmed);
+      if (shape === oldValue) setShape(newVal);
       await StorageService.saveCakeShapes(updated);
     } else if (category === 'Add-on') {
-      const updated = availableAddons.map((item) => (item === oldValue ? trimmed : item));
+      const updated = availableAddons.map((a) => (a === oldValue ? newVal : a));
       setAvailableAddons(updated);
-      setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? trimmed : a)));
+      if (selectedAddons.includes(oldValue)) {
+        setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? newVal : a)));
+      }
       await StorageService.saveCakeAddons(updated);
     }
 
@@ -284,18 +321,26 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   };
 
   const pickImages = async () => {
-    triggerHaptic.selection();
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsMultipleSelection: true,
-      selectionLimit: 5,
-      quality: 0.8,
-    });
+    try {
+      const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!permissionResult.granted) {
+        Alert.alert('Permission needed', 'Please allow photo gallery access to attach cake inspiration photos.');
+        return;
+      }
 
-    if (!result.canceled && result.assets) {
-      const uris = result.assets.map((a) => a.uri);
-      setReferenceImages((prev) => [...prev, ...uris]);
-      triggerHaptic.light();
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsMultipleSelection: true,
+        quality: 0.7,
+      });
+
+      if (!result.canceled && result.assets) {
+        const uris = result.assets.map((asset) => asset.uri);
+        triggerHaptic.success();
+        setReferenceImages((prev) => [...prev, ...uris]);
+      }
+    } catch {
+      Alert.alert('Error', 'Unable to pick images.');
     }
   };
 
@@ -310,7 +355,6 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       return;
     }
 
-    const price = parseFloat(priceStr) || 0;
     triggerHaptic.success();
     onSave({
       id: orderToEdit ? orderToEdit.id : undefined,
@@ -320,7 +364,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       flavor,
       addons: selectedAddons,
       status,
-      quotedPrice: price,
+      quotedPrice: totalVal,
+      downPayment: downVal,
+      remainingPayment: remainingVal,
+      fulfillmentType,
+      location: location.trim(),
+      reminderEnabled,
+      reminderTiming: reminderEnabled ? reminderTiming : undefined,
       customRequirements: customRequirements.trim(),
       deliveryDate: deliveryDate.toISOString(),
       referenceImages,
@@ -375,9 +425,92 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               />
             </View>
 
-            {/* Section 2: Delivery Date & Time (Pop-up native Calendar & Clock Knob) */}
+            {/* Section 2: Fulfillment & Location */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Delivery / Due Schedule</Text>
+              <Text style={styles.sectionTitle}>Fulfillment Method & Location</Text>
+              <View style={styles.segmentedRow}>
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    fulfillmentType === 'Pickup' && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    triggerHaptic.selection();
+                    setFulfillmentType('Pickup');
+                  }}
+                >
+                  <Ionicons
+                    name="storefront-outline"
+                    size={16}
+                    color={fulfillmentType === 'Pickup' ? '#FFFFFF' : Theme.colors.textDark}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.segmentBtnText,
+                      fulfillmentType === 'Pickup' && styles.segmentBtnTextActive,
+                    ]}
+                  >
+                    Bakery Pick Up
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.segmentBtn,
+                    fulfillmentType === 'Delivery' && styles.segmentBtnActive,
+                  ]}
+                  onPress={() => {
+                    triggerHaptic.selection();
+                    setFulfillmentType('Delivery');
+                  }}
+                >
+                  <Ionicons
+                    name="car-outline"
+                    size={16}
+                    color={fulfillmentType === 'Delivery' ? '#FFFFFF' : Theme.colors.textDark}
+                    style={{ marginRight: 6 }}
+                  />
+                  <Text
+                    style={[
+                      styles.segmentBtnText,
+                      fulfillmentType === 'Delivery' && styles.segmentBtnTextActive,
+                    ]}
+                  >
+                    Direct Delivery
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.fieldLabel}>
+                {fulfillmentType === 'Delivery' ? 'Delivery Address / Venue' : 'Pickup Location / Counter Notes'}
+              </Text>
+              <View style={styles.locationInputRow}>
+                <Ionicons
+                  name={fulfillmentType === 'Delivery' ? 'location-outline' : 'business-outline'}
+                  size={18}
+                  color={Theme.colors.deepRose}
+                  style={{ marginRight: 8 }}
+                />
+                <TextInput
+                  style={styles.locationInput}
+                  placeholder={
+                    fulfillmentType === 'Delivery'
+                      ? 'e.g. 742 Evergreen Terrace or Rosewood Ballroom'
+                      : 'e.g. Main Studio front desk, or client phone'
+                  }
+                  placeholderTextColor={Theme.colors.textSecondary}
+                  value={location}
+                  onChangeText={setLocation}
+                />
+              </View>
+            </View>
+
+            {/* Section 3: Delivery Date & Time (Pop-up native Calendar & Clock Knob) */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>
+                {fulfillmentType === 'Delivery' ? 'Delivery Schedule' : 'Pickup Schedule'}
+              </Text>
               <Text style={styles.fieldSubtitle}>
                 Tap below to open the native calendar or iPhone time dial
               </Text>
@@ -396,7 +529,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   <Ionicons name="calendar" size={20} color={Theme.colors.deepRose} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.pickerLabel}>Delivery Date</Text>
+                  <Text style={styles.pickerLabel}>Scheduled Date</Text>
                   <Text style={styles.pickerValue}>{formattedDateStr}</Text>
                 </View>
                 <Ionicons
@@ -443,7 +576,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   <Ionicons name="time" size={20} color={Theme.colors.softLilac} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.pickerLabel}>Pickup / Ready Time</Text>
+                  <Text style={styles.pickerLabel}>
+                    {fulfillmentType === 'Delivery' ? 'Delivery Arrival Time' : 'Pickup / Ready Time'}
+                  </Text>
                   <Text style={styles.pickerValue}>{formattedTimeStr}</Text>
                 </View>
                 <Ionicons
@@ -475,9 +610,69 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   )}
                 </View>
               )}
+
+              {/* 3. Reminder Toggle & Interval Selection (Directly below schedule) */}
+              <View style={styles.reminderCard}>
+                <View style={styles.reminderToggleRow}>
+                  <View style={styles.reminderInfo}>
+                    <Ionicons
+                      name={reminderEnabled ? 'notifications' : 'notifications-outline'}
+                      size={20}
+                      color={reminderEnabled ? Theme.colors.deepRose : Theme.colors.textSecondary}
+                      style={{ marginRight: 8 }}
+                    />
+                    <View>
+                      <Text style={styles.reminderTitle}>Order Reminder Notification</Text>
+                      <Text style={styles.reminderSubtitle}>
+                        Alert me inside the app before this order is due
+                      </Text>
+                    </View>
+                  </View>
+                  <Switch
+                    value={reminderEnabled}
+                    onValueChange={(val) => {
+                      triggerHaptic.selection();
+                      setReminderEnabled(val);
+                    }}
+                    trackColor={{ false: Theme.colors.border, true: Theme.colors.roseGold }}
+                    thumbColor={reminderEnabled ? Theme.colors.deepRose : '#FFFFFF'}
+                  />
+                </View>
+
+                {reminderEnabled && (
+                  <View style={styles.timingSelectBox}>
+                    <Text style={styles.timingLabel}>When should we remind you?</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timingChipRow}>
+                      {REMINDER_OPTIONS.map((opt) => {
+                        const isChosen = reminderTiming === opt.value;
+                        return (
+                          <TouchableOpacity
+                            key={opt.value}
+                            style={[styles.timingChip, isChosen && styles.timingChipActive]}
+                            onPress={() => {
+                              triggerHaptic.selection();
+                              setReminderTiming(opt.value);
+                            }}
+                          >
+                            <Ionicons
+                              name={isChosen ? 'alarm' : 'time-outline'}
+                              size={13}
+                              color={isChosen ? '#FFFFFF' : Theme.colors.textDark}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={[styles.timingChipText, isChosen && styles.timingChipTextActive]}>
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
             </View>
 
-            {/* Section 3: Cake Specifications (Type, Shape, Flavor) */}
+            {/* Section 4: Cake Specifications (Type, Shape, Flavor) */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Cake Specifications</Text>
               <Text style={styles.fieldSubtitle}>
@@ -622,22 +817,15 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 ))}
               </ScrollView>
 
-              {/* 4. Add-ons (Multi-selection: Topper, Flowers, Pictures, etc.) */}
+              {/* 4. Multi-select Add-ons */}
               <View style={styles.titleWithAction}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.fieldLabel}>Add-ons (Multi-Select)</Text>
-                  {selectedAddons.length > 0 && (
-                    <View style={styles.addonsCountBadge}>
-                      <Text style={styles.addonsCountText}>{selectedAddons.length} selected</Text>
-                    </View>
-                  )}
-                </View>
+                <Text style={styles.fieldLabel}>Add-ons & Accents (Multi-select)</Text>
                 <TouchableOpacity
                   onPress={() => setShowAddAddon(!showAddAddon)}
                   style={styles.inlineAddBtn}
                 >
                   <Ionicons name={showAddAddon ? 'close-circle' : 'add-circle'} size={14} color={Theme.colors.deepRose} />
-                  <Text style={styles.inlineAddText}>{showAddAddon ? 'Cancel' : 'Add Add-on'}</Text>
+                  <Text style={styles.inlineAddText}>{showAddAddon ? 'Cancel' : 'Add Option'}</Text>
                 </TouchableOpacity>
               </View>
 
@@ -645,7 +833,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 <View style={styles.addItemBox}>
                   <TextInput
                     style={styles.addItemInput}
-                    placeholder="New addon (e.g. Edible Butterflies, Sparkler)..."
+                    placeholder="New add-on (e.g. LED Lights, Sparklers)..."
                     placeholderTextColor={Theme.colors.textSecondary}
                     value={newAddonInput}
                     onChangeText={setNewAddonInput}
@@ -682,11 +870,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               </ScrollView>
             </View>
 
-            {/* Section 4: Status & Pricing */}
+            {/* Section 5: Status, Total, Down Payment & Remaining */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Status & Financials</Text>
+              <Text style={styles.sectionTitle}>Status & Payments</Text>
 
-              <Text style={styles.fieldLabel}>Status</Text>
+              <Text style={styles.fieldLabel}>Order Status</Text>
               <View style={styles.statusRow}>
                 {(['Pending', 'Baking', 'Decorating', 'Delivered'] as OrderStatus[]).map((s) => (
                   <TouchableOpacity
@@ -706,18 +894,74 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 ))}
               </View>
 
-              <Text style={styles.fieldLabel}>Quoted Commission Price ($)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. 120"
-                placeholderTextColor={Theme.colors.textSecondary}
-                keyboardType="decimal-pad"
-                value={priceStr}
-                onChangeText={setPriceStr}
-              />
+              {/* Payments Split Box */}
+              <View style={styles.paymentCard}>
+                <View style={styles.paymentInputGrid}>
+                  {/* Total Payment */}
+                  <View style={styles.paymentInputCol}>
+                    <Text style={styles.paymentFieldLabel}>Total Payment ($)</Text>
+                    <View style={styles.currencyInputRow}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        style={styles.currencyInput}
+                        placeholder="0.00"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={totalPaymentStr}
+                        onChangeText={setTotalPaymentStr}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Down Payment */}
+                  <View style={styles.paymentInputCol}>
+                    <Text style={styles.paymentFieldLabel}>Down Payment ($)</Text>
+                    <View style={styles.currencyInputRow}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        style={styles.currencyInput}
+                        placeholder="0.00"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={downPaymentStr}
+                        onChangeText={setDownPaymentStr}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                {/* Auto Calculated Remaining Payment */}
+                <View style={styles.remainingCard}>
+                  <View style={styles.remainingRow}>
+                    <View style={styles.remainingInfo}>
+                      <Text style={styles.remainingLabel}>Remaining Balance Due</Text>
+                      <Text style={styles.remainingFormula}>
+                        Total (${totalVal.toFixed(2)}) - Down (${downVal.toFixed(2)})
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.remainingPill,
+                      remainingVal === 0 ? styles.remainingPillPaid : styles.remainingPillDue,
+                    ]}>
+                      <Ionicons
+                        name={remainingVal === 0 ? 'checkmark-circle' : 'time-outline'}
+                        size={14}
+                        color={remainingVal === 0 ? '#2E7D32' : Theme.colors.deepRose}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[
+                        styles.remainingText,
+                        remainingVal === 0 ? styles.remainingTextPaid : styles.remainingTextDue,
+                      ]}>
+                        ${remainingVal.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
             </View>
 
-            {/* Section 5: Photo Attachments */}
+            {/* Section 6: Photo Attachments */}
             <View style={styles.section}>
               <View style={styles.titleWithAction}>
                 <Text style={styles.sectionTitle}>Sketches & Inspo Photos</Text>
@@ -749,64 +993,53 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               )}
             </View>
 
-            {/* Section 6: Custom Requirements */}
+            {/* Section 7: Notes & Custom Requirements */}
             <View style={[styles.section, { marginBottom: 40 }]}>
-              <Text style={styles.sectionTitle}>Dietary Notes & Custom Piping</Text>
+              <Text style={styles.sectionTitle}>Custom Notes & Piping Text</Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="e.g. Edible gold leaf, gluten-free almond flour, write 'Happy Birthday Bella' in lavender cursive..."
+                placeholder="Message on cake, dietary restrictions, color scheme, pickup notes..."
                 placeholderTextColor={Theme.colors.textSecondary}
                 multiline
-                numberOfLines={4}
+                numberOfLines={3}
                 value={customRequirements}
                 onChangeText={setCustomRequirements}
               />
             </View>
           </ScrollView>
 
-          {/* Long-Press Rename Modal Dialog */}
-          <Modal
-            visible={renameTarget !== null}
-            transparent
-            animationType="fade"
-          >
-            <View style={styles.renameOverlay}>
-              <View style={styles.renameCard}>
-                <View style={styles.renameHeader}>
-                  <Ionicons name="pencil" size={18} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
-                  <Text style={styles.renameTitle}>Rename {renameTarget?.category}</Text>
-                </View>
-                <Text style={styles.renameSubtitle}>
-                  Change name from "{renameTarget?.oldValue}":
-                </Text>
+          {/* Quick Rename Pop-up Modal */}
+          {renameTarget && (
+            <Modal transparent animationType="fade" visible={Boolean(renameTarget)}>
+              <View style={styles.renameOverlay}>
+                <View style={styles.renameCard}>
+                  <Text style={styles.renameTitle}>Rename {renameTarget.category}</Text>
+                  <Text style={styles.renameSubtitle}>Editing: "{renameTarget.oldValue}"</Text>
 
-                <TextInput
-                  style={styles.renameInput}
-                  value={renameInputValue}
-                  onChangeText={setRenameInputValue}
-                  placeholder={`Enter new ${renameTarget?.category?.toLowerCase()} name...`}
-                  placeholderTextColor={Theme.colors.textSecondary}
-                  autoFocus
-                />
+                  <TextInput
+                    style={styles.renameInput}
+                    value={renameInputValue}
+                    onChangeText={setRenameInputValue}
+                    placeholder="Enter new name"
+                    autoFocus
+                  />
 
-                <View style={styles.renameActions}>
-                  <TouchableOpacity
-                    style={styles.renameCancelBtn}
-                    onPress={() => setRenameTarget(null)}
-                  >
-                    <Text style={styles.renameCancelText}>Cancel</Text>
-                  </TouchableOpacity>
+                  <View style={styles.renameBtnRow}>
+                    <TouchableOpacity
+                      style={styles.renameCancelBtn}
+                      onPress={() => setRenameTarget(null)}
+                    >
+                      <Text style={styles.renameCancelText}>Cancel</Text>
+                    </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.renameConfirmBtn}
-                    onPress={confirmRename}
-                  >
-                    <Text style={styles.renameConfirmText}>Rename</Text>
-                  </TouchableOpacity>
+                    <TouchableOpacity style={styles.renameSaveBtn} onPress={confirmRename}>
+                      <Text style={styles.renameSaveText}>Update</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
-            </View>
-          </Modal>
+            </Modal>
+          )}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -823,88 +1056,123 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: Theme.colors.border,
     backgroundColor: Theme.colors.white,
+  },
+  headerTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
   },
   headerButton: {
     padding: 6,
   },
   cancelText: {
-    fontSize: 16,
+    fontSize: 15,
     color: Theme.colors.textSecondary,
-    fontWeight: '600',
   },
   saveText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontWeight: '700',
     color: Theme.colors.deepRose,
-    fontWeight: '800',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: Theme.colors.textDark,
   },
   content: {
+    flex: 1,
     padding: 16,
   },
   section: {
-    backgroundColor: Theme.colors.white,
-    borderRadius: Theme.borderRadius.card,
-    padding: 14,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
+    marginBottom: 22,
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '800',
-    color: Theme.colors.textMauve,
-    marginBottom: 4,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 8,
   },
   fieldSubtitle: {
     fontSize: 12,
     color: Theme.colors.textSecondary,
-    marginBottom: 10,
-  },
-  fieldLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Theme.colors.textSecondary,
-    marginTop: 8,
-    marginBottom: 6,
+    marginBottom: 8,
   },
   input: {
-    backgroundColor: Theme.colors.warmIvory,
-    borderRadius: Theme.borderRadius.input,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     fontSize: 14,
     color: Theme.colors.textDark,
   },
   textArea: {
-    height: 90,
+    height: 80,
     textAlignVertical: 'top',
+  },
+  segmentedRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  segmentBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.border,
+  },
+  segmentBtnActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderColor: Theme.colors.deepRose,
+  },
+  segmentBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  segmentBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  locationInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  locationInput: {
+    flex: 1,
+    paddingVertical: 12,
+    fontSize: 13,
+    color: Theme.colors.textDark,
   },
   pickerButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.warmIvory,
-    borderRadius: Theme.borderRadius.input,
+    backgroundColor: Theme.colors.white,
+    borderRadius: 14,
     padding: 12,
     borderWidth: 1,
     borderColor: Theme.colors.border,
   },
   pickerButtonActive: {
     borderColor: Theme.colors.deepRose,
-    backgroundColor: Theme.colors.blushPink,
+    backgroundColor: '#FFF8FA',
   },
   pickerIconWrapper: {
     width: 38,
     height: 38,
-    borderRadius: 12,
+    borderRadius: 10,
     backgroundColor: Theme.colors.blushPink,
     alignItems: 'center',
     justifyContent: 'center',
@@ -912,87 +1180,118 @@ const styles = StyleSheet.create({
   },
   pickerLabel: {
     fontSize: 11,
-    fontWeight: '700',
     color: Theme.colors.textSecondary,
+    fontWeight: '600',
+    textTransform: 'uppercase',
   },
   pickerValue: {
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Theme.colors.textDark,
-    marginTop: 2,
+    marginTop: 1,
   },
   inlinePickerContainer: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Theme.colors.white,
     borderRadius: 16,
-    padding: 8,
+    padding: 10,
     marginTop: 8,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Theme.colors.pastelRose,
-    shadowColor: Theme.colors.textDark,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
+    borderColor: Theme.colors.border,
   },
   donePickerBtn: {
+    marginTop: 6,
     alignSelf: 'flex-end',
-    backgroundColor: Theme.colors.deepRose,
     paddingHorizontal: 16,
     paddingVertical: 6,
-    borderRadius: Theme.borderRadius.pill,
-    marginVertical: 6,
-    marginRight: 6,
+    borderRadius: 8,
+    backgroundColor: Theme.colors.deepRose,
   },
   donePickerText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  reminderCard: {
+    marginTop: 14,
+    backgroundColor: Theme.colors.white,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  reminderToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  reminderInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginRight: 10,
+  },
+  reminderTitle: {
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  reminderSubtitle: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    marginTop: 1,
+  },
+  timingSelectBox: {
+    marginTop: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.border,
+  },
+  timingLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 8,
+  },
+  timingChipRow: {
+    flexDirection: 'row',
+  },
+  timingChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Theme.colors.cream,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginRight: 8,
+  },
+  timingChipActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderColor: Theme.colors.deepRose,
+  },
+  timingChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  timingChipTextActive: {
+    color: '#FFFFFF',
   },
   titleWithAction: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginTop: 12,
     marginBottom: 6,
   },
-  chipRow: {
-    flexDirection: 'row',
-    marginBottom: 6,
-  },
-  chip: {
-    backgroundColor: Theme.colors.warmIvory,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: Theme.borderRadius.pill,
-    marginRight: 8,
-  },
-  chipActive: {
-    backgroundColor: Theme.colors.deepRose,
-  },
-  chipMultiActive: {
-    backgroundColor: Theme.colors.deepRose,
-    borderWidth: 1,
-    borderColor: Theme.colors.deepRose,
-  },
-  addonsCountBadge: {
-    backgroundColor: Theme.colors.blushPink,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: Theme.borderRadius.pill,
-  },
-  addonsCountText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: Theme.colors.deepRose,
-  },
-  chipText: {
+  fieldLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: Theme.colors.textDark,
-  },
-  chipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '700',
   },
   inlineAddBtn: {
     flexDirection: 'row',
@@ -1006,46 +1305,82 @@ const styles = StyleSheet.create({
   },
   addItemBox: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: Theme.colors.warmIvory,
-    borderRadius: Theme.borderRadius.input,
-    padding: 6,
     marginBottom: 8,
     gap: 8,
   },
   addItemInput: {
     flex: 1,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     fontSize: 13,
     color: Theme.colors.textDark,
-    paddingHorizontal: 8,
   },
   addItemSaveBtn: {
     backgroundColor: Theme.colors.deepRose,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: Theme.borderRadius.pill,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   addItemSaveText: {
-    fontSize: 12,
-    fontWeight: '800',
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  chipRow: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 18,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginRight: 8,
+  },
+  chipActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderColor: Theme.colors.deepRose,
+  },
+  chipMultiActive: {
+    backgroundColor: Theme.colors.roseGold,
+    borderColor: Theme.colors.roseGold,
+  },
+  chipText: {
+    fontSize: 12,
+    color: Theme.colors.textDark,
+    fontWeight: '500',
+  },
+  chipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   statusRow: {
     flexDirection: 'row',
     gap: 6,
-    marginBottom: 8,
+    marginTop: 6,
+    marginBottom: 14,
   },
   statusTab: {
     flex: 1,
     paddingVertical: 8,
-    borderRadius: Theme.borderRadius.pill,
-    backgroundColor: Theme.colors.warmIvory,
+    borderRadius: 10,
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
     alignItems: 'center',
   },
   statusTabActive: {
-    backgroundColor: Theme.colors.blushPink,
-    borderWidth: 1.5,
-    borderColor: Theme.colors.deepRose,
+    backgroundColor: Theme.colors.lavenderLight,
+    borderColor: Theme.colors.softLilac,
   },
   statusTabText: {
     fontSize: 11,
@@ -1053,16 +1388,103 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
   },
   statusTabTextActive: {
+    color: Theme.colors.textDark,
+    fontWeight: '700',
+  },
+  paymentCard: {
+    backgroundColor: Theme.colors.white,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  paymentInputGrid: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  paymentInputCol: {
+    flex: 1,
+  },
+  paymentFieldLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  currencyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.cream,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+  },
+  currencySymbol: {
+    fontSize: 15,
+    fontWeight: '700',
     color: Theme.colors.deepRose,
+    marginRight: 4,
+  },
+  currencyInput: {
+    flex: 1,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  remainingCard: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.border,
+  },
+  remainingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  remainingInfo: {
+    flex: 1,
+  },
+  remainingLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  remainingFormula: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  remainingPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  remainingPillPaid: {
+    backgroundColor: '#E8F5E9',
+  },
+  remainingPillDue: {
+    backgroundColor: '#FFF0F2',
+  },
+  remainingText: {
+    fontSize: 14,
     fontWeight: '800',
+  },
+  remainingTextPaid: {
+    color: '#2E7D32',
+  },
+  remainingTextDue: {
+    color: Theme.colors.deepRose,
   },
   addPhotosBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.blushPink,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
   },
   addPhotosText: {
     fontSize: 12,
@@ -1083,97 +1505,90 @@ const styles = StyleSheet.create({
   },
   removePhoto: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -5,
+    right: -5,
     backgroundColor: 'rgba(0,0,0,0.5)',
-    borderRadius: 10,
+    borderRadius: 12,
   },
   photoPlaceholder: {
+    height: 75,
     borderWidth: 1.5,
-    borderColor: Theme.colors.pastelRose,
+    borderColor: Theme.colors.border,
     borderStyle: 'dashed',
-    borderRadius: 14,
-    paddingVertical: 20,
-    alignItems: 'center',
+    borderRadius: 12,
     justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
   },
   photoPlaceholderText: {
     fontSize: 12,
     color: Theme.colors.textSecondary,
-    marginTop: 6,
-    fontWeight: '600',
+    marginTop: 4,
   },
   renameOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    backgroundColor: 'rgba(0,0,0,0.45)',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 24,
+    padding: 24,
   },
   renameCard: {
     width: '100%',
     backgroundColor: Theme.colors.white,
-    borderRadius: Theme.borderRadius.card,
+    borderRadius: 18,
     padding: 20,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    shadowColor: Theme.colors.textDark,
-    shadowOffset: { width: 0, height: 6 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowRadius: 10,
     elevation: 8,
-  },
-  renameHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
   },
   renameTitle: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '700',
     color: Theme.colors.textDark,
   },
   renameSubtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
+    marginTop: 3,
     marginBottom: 14,
   },
   renameInput: {
-    backgroundColor: Theme.colors.warmIvory,
-    borderRadius: Theme.borderRadius.input,
-    paddingHorizontal: 14,
+    backgroundColor: Theme.colors.cream,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 14,
     color: Theme.colors.textDark,
-    borderWidth: 1,
-    borderColor: Theme.colors.pastelRose,
     marginBottom: 16,
   },
-  renameActions: {
+  renameBtnRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
     gap: 10,
   },
   renameCancelBtn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
-    borderRadius: Theme.borderRadius.pill,
-    backgroundColor: Theme.colors.warmIvory,
+    borderRadius: 8,
   },
   renameCancelText: {
     fontSize: 13,
-    fontWeight: '700',
     color: Theme.colors.textSecondary,
+    fontWeight: '600',
   },
-  renameConfirmBtn: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: Theme.borderRadius.pill,
+  renameSaveBtn: {
     backgroundColor: Theme.colors.deepRose,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
-  renameConfirmText: {
-    fontSize: 13,
-    fontWeight: '800',
+  renameSaveText: {
     color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

@@ -32,6 +32,8 @@ export const OrderRow: React.FC<OrderRowProps> = ({
     Decorating: 'Deliver',
   };
 
+  const remaining = order.remainingPayment ?? Math.max(0, order.quotedPrice - (order.downPayment || 0));
+
   return (
     <TouchableOpacity
       style={styles.container}
@@ -58,18 +60,47 @@ export const OrderRow: React.FC<OrderRowProps> = ({
             <Text style={styles.customerName} numberOfLines={1}>
               {order.customerName}
             </Text>
-            <Text style={styles.price}>${order.quotedPrice.toFixed(2)}</Text>
+            <View style={styles.priceContainer}>
+              <Text style={styles.price}>${order.quotedPrice.toFixed(2)}</Text>
+              {remaining > 0 ? (
+                <Text style={styles.remainingDueText}>(${remaining.toFixed(0)} due)</Text>
+              ) : (
+                <Text style={styles.paidBadgeText}>✓ Paid</Text>
+              )}
+            </View>
           </View>
 
           <Text style={styles.cakeType} numberOfLines={1}>
             {order.cakeType} • {order.shape}
           </Text>
 
+          {/* Schedule & Fulfillment Line */}
           <View style={styles.scheduleRow}>
+            <Ionicons
+              name={order.fulfillmentType === 'Delivery' ? 'car-outline' : 'storefront-outline'}
+              size={12}
+              color={Theme.colors.deepRose}
+              style={{ marginRight: 4 }}
+            />
+            <Text style={styles.fulfillmentTag}>
+              {order.fulfillmentType === 'Delivery' ? 'Delivery' : 'Pickup'}
+            </Text>
+            <Text style={styles.dotSeparator}>•</Text>
             <Ionicons name="calendar-outline" size={12} color={Theme.colors.textSecondary} style={{ marginRight: 4 }} />
             <Text style={styles.dateText}>{formattedDate}</Text>
           </View>
 
+          {/* Location note if present */}
+          {Boolean(order.location) && (
+            <View style={styles.locationRow}>
+              <Ionicons name="location-outline" size={11} color={Theme.colors.textSecondary} style={{ marginRight: 3 }} />
+              <Text style={styles.locationText} numberOfLines={1}>
+                {order.location}
+              </Text>
+            </View>
+          )}
+
+          {/* Badges / Status row */}
           <View style={styles.bottomRow}>
             <StatusPill status={order.status} />
 
@@ -90,6 +121,12 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               </View>
             ) : null}
 
+            {order.reminderEnabled && (
+              <View style={styles.reminderBadge}>
+                <Ionicons name="notifications" size={10} color={Theme.colors.softLilac} />
+              </View>
+            )}
+
             {order.referenceImages && order.referenceImages.length > 1 && (
               <View style={styles.photoCountBadge}>
                 <Ionicons name="images-outline" size={10} color={Theme.colors.textSecondary} />
@@ -98,32 +135,30 @@ export const OrderRow: React.FC<OrderRowProps> = ({
             )}
           </View>
         </View>
-      </View>
 
-      {/* Swipe/Quick Actions Bar */}
-      <View style={styles.actionBar}>
-        {order.status !== 'Delivered' && (
+        {/* Action column */}
+        <View style={styles.actionColumn}>
+          {order.status !== 'Delivered' && (
+            <TouchableOpacity
+              style={styles.advanceButton}
+              onPress={onQuickAdvance}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.advanceText}>
+                {nextStatusLabel[order.status] || 'Next'}
+              </Text>
+              <Ionicons name="chevron-forward" size={11} color="#FFFFFF" />
+            </TouchableOpacity>
+          )}
+
           <TouchableOpacity
-            style={styles.advanceButton}
-            onPress={onQuickAdvance}
-            activeOpacity={0.7}
+            style={styles.deleteButton}
+            onPress={onDelete}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Ionicons name="arrow-forward-circle" size={14} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
-            <Text style={styles.advanceButtonText}>
-              Mark {nextStatusLabel[order.status] || 'Next'}
-            </Text>
+            <Ionicons name="trash-outline" size={16} color={Theme.colors.textSecondary} />
           </TouchableOpacity>
-        )}
-
-        <View style={{ flex: 1 }} />
-
-        <TouchableOpacity
-          style={styles.deleteButton}
-          onPress={onDelete}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="trash-outline" size={14} color={Theme.colors.textSecondary} />
-        </TouchableOpacity>
+        </View>
       </View>
     </TouchableOpacity>
   );
@@ -132,131 +167,177 @@ export const OrderRow: React.FC<OrderRowProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Theme.colors.white,
-    borderRadius: Theme.borderRadius.card,
-    padding: 14,
-    marginBottom: 12,
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 10,
     borderWidth: 1,
     borderColor: Theme.colors.border,
-    shadowColor: Theme.colors.textDark,
-    shadowOffset: { width: 0, height: 3 },
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowRadius: 3,
     elevation: 2,
   },
   contentRow: {
     flexDirection: 'row',
   },
   imageBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 14,
-    backgroundColor: Theme.colors.lavenderLight,
-    alignItems: 'center',
+    width: 62,
+    height: 62,
+    borderRadius: 12,
+    backgroundColor: Theme.colors.blushPink,
     justifyContent: 'center',
+    alignItems: 'center',
     overflow: 'hidden',
     marginRight: 12,
   },
   image: {
-    width: 60,
-    height: 60,
+    width: '100%',
+    height: '100%',
   },
   details: {
     flex: 1,
+    justifyContent: 'center',
   },
   topLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'baseline',
   },
   customerName: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '700',
     color: Theme.colors.textDark,
     flex: 1,
     marginRight: 8,
   },
+  priceContainer: {
+    alignItems: 'flex-end',
+  },
   price: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: Theme.colors.textMauve,
+    color: Theme.colors.deepRose,
+  },
+  remainingDueText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#D81B60',
+  },
+  paidBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2E7D32',
   },
   cakeType: {
-    fontSize: 13,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
-    fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
   },
   scheduleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    marginTop: 3,
+  },
+  fulfillmentTag: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  dotSeparator: {
+    marginHorizontal: 5,
+    color: Theme.colors.textSecondary,
+    fontSize: 10,
   },
   dateText: {
-    fontSize: 12,
+    fontSize: 11,
     color: Theme.colors.textSecondary,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  locationText: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    flex: 1,
   },
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    marginTop: 6,
     flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 8,
+    gap: 5,
   },
   flavorPill: {
-    backgroundColor: Theme.colors.warmIvory,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: Theme.borderRadius.pill,
-    maxWidth: 120,
+    backgroundColor: Theme.colors.cream,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    maxWidth: 90,
   },
   flavorText: {
-    fontSize: 11,
-    color: Theme.colors.textSecondary,
-    fontWeight: '600',
+    fontSize: 10,
+    color: Theme.colors.textDark,
   },
   addonsPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.blushPink,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: Theme.borderRadius.pill,
+    backgroundColor: '#FFF0F3',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
   },
   addonsText: {
-    fontSize: 11,
-    color: Theme.colors.deepRose,
+    fontSize: 10,
     fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  reminderBadge: {
+    backgroundColor: Theme.colors.lavenderLight,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   photoCountBadge: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: Theme.colors.cream,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
     gap: 2,
   },
   photoCountText: {
-    fontSize: 10,
+    fontSize: 9,
     color: Theme.colors.textSecondary,
-    fontWeight: '700',
   },
-  actionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: Theme.colors.warmIvory,
+  actionColumn: {
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+    marginLeft: 6,
+    paddingVertical: 2,
   },
   advanceButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.blushPink,
-    paddingHorizontal: 10,
+    backgroundColor: Theme.colors.deepRose,
+    paddingHorizontal: 8,
     paddingVertical: 5,
-    borderRadius: Theme.borderRadius.pill,
+    borderRadius: 8,
+    gap: 2,
   },
-  advanceButtonText: {
-    fontSize: 11,
+  advanceText: {
+    color: '#FFFFFF',
+    fontSize: 10,
     fontWeight: '700',
-    color: Theme.colors.deepRose,
   },
   deleteButton: {
     padding: 4,

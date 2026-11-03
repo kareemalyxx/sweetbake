@@ -1,5 +1,9 @@
 export type OrderStatus = 'Pending' | 'Baking' | 'Decorating' | 'Delivered';
 
+export type FulfillmentType = 'Pickup' | 'Delivery';
+
+export type ReminderTiming = 'on_time' | '15_min' | '1_hour' | '2_hours' | '1_day';
+
 export interface CakeOrder {
   id: string;
   customerName: string;
@@ -11,6 +15,12 @@ export interface CakeOrder {
   customRequirements: string;
   status: OrderStatus;
   quotedPrice: number;
+  downPayment?: number; // Down payment paid in advance
+  remainingPayment?: number; // Calculated: quotedPrice - downPayment
+  fulfillmentType?: FulfillmentType; // 'Pickup' | 'Delivery'
+  location?: string; // Delivery address or Pickup location notes
+  reminderEnabled?: boolean; // In-app reminder active
+  reminderTiming?: ReminderTiming; // When to be notified
   referenceImages: string[]; // Base64 or local file URIs
   createdAt: string;
 }
@@ -25,4 +35,3 @@ export interface GeneralRequirement {
   orderId?: string; // Optional link to specific cake commission
   createdAt: string;
 }
-
