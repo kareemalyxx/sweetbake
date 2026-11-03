@@ -12,6 +12,10 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus } from './src/types';
 import { StorageService } from './src/services/storage';
+import { FirestoreService } from './src/services/firestore';
+import { AuthService } from './src/services/auth';
+import { AuthModal } from './src/components/AuthModal';
+import { User } from 'firebase/auth';
 import { NotificationService, InAppNotification } from './src/services/notifications';
 import { Theme } from './src/theme';
 import { triggerHaptic } from './src/services/haptics';
@@ -31,12 +35,45 @@ export default function App() {
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [allReminders, setAllReminders] = useState<InAppNotification[]>([]);
 
+  // Firebase Auth & Cloud Sync
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   useEffect(() => {
-    loadData();
+    // Listen to Firebase Auth state
+    const unsubscribeAuth = AuthService.subscribeToAuthChanges((user) => {
+      setCurrentUser(user);
+    });
+
+    return () => {
+      unsubscribeAuth();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unsubscribeOrders: (() => void) | undefined;
+    let unsubscribeReqs: (() => void) | undefined;
+
+    if (currentUser) {
+      // Real-time Firestore listeners for authenticated user
+      unsubscribeOrders = FirestoreService.subscribeToOrders(currentUser.uid, (cloudOrders) => {
+        setOrders(cloudOrders);
+      });
+      unsubscribeReqs = FirestoreService.subscribeToRequirements(currentUser.uid, (cloudReqs) => {
+        setRequirements(cloudReqs);
+      });
+    } else {
+      loadData();
+    }
+
     checkReminders();
     const interval = setInterval(checkReminders, 20000); // Check every 20 seconds
-    return () => clearInterval(interval);
-  }, []);
+    return () => {
+      clearInterval(interval);
+      if (unsubscribeOrders) unsubscribeOrders();
+      if (unsubscribeReqs) unsubscribeReqs();
+    };
+  }, [currentUser]);
 
   const loadData = async () => {
     const fetchedOrders = await StorageService.getOrders();
@@ -102,6 +139,16 @@ export default function App() {
     setOrders(updatedOrders);
     await StorageService.saveOrders(updatedOrders);
 
+    // Sync order to Firestore if logged in
+    if (currentUser && targetOrderId) {
+      const orderToSave = updatedOrders.find((o) => o.id === targetOrderId);
+      if (orderToSave) {
+        FirestoreService.saveOrder(currentUser.uid, orderToSave).catch((e) =>
+          console.warn('Failed to sync order to Firestore:', e)
+        );
+      }
+    }
+
     // Schedule or update In-App notification reminder
     const savedOrder = updatedOrders.find((o) => o.id === targetOrderId);
     if (savedOrder) {
@@ -145,6 +192,12 @@ export default function App() {
     setOrders(updated);
     await StorageService.saveOrders(updated);
 
+    if (currentUser) {
+      FirestoreService.deleteOrder(currentUser.uid, id).catch((e) =>
+        console.warn('Failed to delete order from Firestore:', e)
+      );
+    }
+
     // Cancel notifications linked to this order
     await NotificationService.cancelOrderReminder(id);
     await checkReminders();
@@ -174,6 +227,15 @@ export default function App() {
     });
     setOrders(updated);
     await StorageService.saveOrders(updated);
+
+    if (currentUser) {
+      const advanced = updated.find((o) => o.id === id);
+      if (advanced) {
+        FirestoreService.saveOrder(currentUser.uid, advanced).catch((e) =>
+          console.warn('Failed to update order status in Firestore:', e)
+        );
+      }
+    }
   };
 
   // Requirements State Handlers
@@ -183,6 +245,15 @@ export default function App() {
     );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+
+    if (currentUser) {
+      const toggled = updated.find((r) => r.id === id);
+      if (toggled) {
+        FirestoreService.saveRequirement(currentUser.uid, toggled).catch((e) =>
+          console.warn('Failed to sync requirement to Firestore:', e)
+        );
+      }
+    }
   };
 
   const handleAddRequirement = async (title: string, category: RequirementCategory) => {
@@ -196,18 +267,37 @@ export default function App() {
     const updated = [newReq, ...requirements];
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+
+    if (currentUser) {
+      FirestoreService.saveRequirement(currentUser.uid, newReq).catch((e) =>
+        console.warn('Failed to save requirement to Firestore:', e)
+      );
+    }
   };
 
   const handleDeleteRequirement = async (id: string) => {
     const updated = requirements.filter((r) => r.id !== id);
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+
+    if (currentUser) {
+      FirestoreService.deleteRequirement(currentUser.uid, id).catch((e) =>
+        console.warn('Failed to delete requirement from Firestore:', e)
+      );
+    }
   };
 
   const handleClearCompleted = async (category: RequirementCategory) => {
+    const toDelete = requirements.filter((r) => r.category === category && r.isCompleted);
     const updated = requirements.filter((r) => !(r.category === category && r.isCompleted));
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+
+    if (currentUser) {
+      toDelete.forEach((r) => {
+        FirestoreService.deleteRequirement(currentUser.uid, r.id).catch(() => {});
+      });
+    }
   };
 
   const handleDismissNotification = async (notifId: string) => {
@@ -230,25 +320,43 @@ export default function App() {
           </View>
         </View>
 
-        {/* Bell Reminder Notification Center */}
-        <TouchableOpacity
-          style={styles.bellButton}
-          onPress={() => {
-            triggerHaptic.selection();
-            setShowNotificationModal(true);
-          }}
-        >
-          <Ionicons
-            name={dueNotifications.length > 0 ? 'notifications' : 'notifications-outline'}
-            size={22}
-            color={dueNotifications.length > 0 ? Theme.colors.deepRose : Theme.colors.textDark}
-          />
-          {dueNotifications.length > 0 && (
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>{dueNotifications.length}</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* Header Right Actions */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          {/* Cloud / Auth Button */}
+          <TouchableOpacity
+            style={styles.bellButton}
+            onPress={() => {
+              triggerHaptic.selection();
+              setShowAuthModal(true);
+            }}
+          >
+            <Ionicons
+              name={currentUser ? 'cloud-done' : 'cloud-offline-outline'}
+              size={22}
+              color={currentUser ? Theme.colors.deepRose : Theme.colors.textDark}
+            />
+          </TouchableOpacity>
+
+          {/* Bell Reminder Notification Center */}
+          <TouchableOpacity
+            style={styles.bellButton}
+            onPress={() => {
+              triggerHaptic.selection();
+              setShowNotificationModal(true);
+            }}
+          >
+            <Ionicons
+              name={dueNotifications.length > 0 ? 'notifications' : 'notifications-outline'}
+              size={22}
+              color={dueNotifications.length > 0 ? Theme.colors.deepRose : Theme.colors.textDark}
+            />
+            {dueNotifications.length > 0 && (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>{dueNotifications.length}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Screen Body */}
@@ -454,6 +562,13 @@ export default function App() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+
+      {/* Firebase Email/Password Auth Modal */}
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUserEmail={currentUser ? currentUser.email : null}
+      />
     </SafeAreaView>
   );
 }

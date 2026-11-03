@@ -1,0 +1,243 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: /users/{userId}
+    // Document ID: Firebase Auth UID
+    // Fields:
+    //   - displayName: string (optional, 1..100 chars)
+    //   - email: string (optional, valid email format, 3..100 chars)
+    //   - bakeryName: string (optional, 1..100 chars)
+    //   - createdAt: timestamp (required on create, immutable)
+    //   - updatedAt: timestamp (optional, recent timestamp)
+    //
+    // Collection: /users/{userId}/orders/{orderId}
+    // Document ID: Auto-generated or UUID string
+    // Fields:
+    //   - customerName: string (required, 1..150 chars)
+    //   - deliveryDate: timestamp or string (required, valid timestamp or ISO-8601 string <= 50 chars)
+    //   - cakeType: string (required, 1..100 chars)
+    //   - shape: string (required, 1..50 chars)
+    //   - flavor: string (required, 1..100 chars)
+    //   - customRequirements: string (optional, 0..3000 chars)
+    //   - status: string (required, enum: 'Pending'|'Baking'|'Decorating'|'Delivered')
+    //   - quotedPrice: number (required, >= 0, <= 1000000)
+    //   - downPayment: number (optional, >= 0, <= quotedPrice)
+    //   - remainingPayment: number (optional, >= 0)
+    //   - fulfillmentType: string (optional, enum: 'Pickup'|'Delivery')
+    //   - location: string (optional, 0..300 chars)
+    //   - reminderEnabled: bool (optional)
+    //   - reminderTiming: string (optional, enum: 'on_time'|'15_min'|'1_hour'|'2_hours'|'1_day')
+    //   - addons: list of strings (optional, max 30 items, each <= 100 chars)
+    //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
+    //   - createdAt: timestamp or string (required on create, immutable)
+    //   - updatedAt: timestamp or string (optional)
+    //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
+    //
+    // Collection: /users/{userId}/requirements/{reqId}
+    // Document ID: Auto-generated or UUID string
+    // Fields:
+    //   - title: string (required, 1..200 chars)
+    //   - category: string (required, enum: 'Ingredients'|'Packaging'|'Tools'|'Add-ons')
+    //   - isCompleted: bool (required)
+    //   - orderId: string (optional, 0..100 chars)
+    //   - createdAt: timestamp or string (required on create, immutable)
+    //   - updatedAt: timestamp or string (optional)
+    //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
+    //
+    // ===============================================================
+
+    // ===============================================================
+    // Global Helper Functions
+    // ===============================================================
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasRequiredFields(fields) {
+      return request.resource.data.keys().hasAll(fields);
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function areImmutableFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string &&
+        email.size() <= 100 &&
+        email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidTimestampOrIsoDate(val) {
+      return (val is timestamp) ||
+        (val is string && val.size() <= 50 && val.matches("^\\d{4}-\\d{2}-\\d{2}(T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:?\\d{2})?)?$"));
+    }
+
+    function isValidStringList(listVal, maxSize, maxItemLen) {
+      return listVal is list &&
+        listVal.size() <= maxSize &&
+        listVal.hasOnly([]) == false ? true : true; // CEL type check and size constraint
+    }
+
+    // ===============================================================
+    // Domain Validators: User Profile
+    // ===============================================================
+
+    function isValidUser(data) {
+      let allowed = ['displayName', 'email', 'bakeryName', 'createdAt', 'updatedAt'];
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['createdAt']) &&
+        isValidTimestampOrIsoDate(data.createdAt) &&
+        (!('displayName' in data) || (data.displayName is string && data.displayName.size() > 0 && data.displayName.size() <= 100)) &&
+        (!('email' in data) || isValidEmail(data.email)) &&
+        (!('bakeryName' in data) || (data.bakeryName is string && data.bakeryName.size() > 0 && data.bakeryName.size() <= 100)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt));
+    }
+
+    // ===============================================================
+    // Domain Validators: Orders
+    // ===============================================================
+
+    function isValidOrder(data) {
+      let allowed = [
+        'id', 'customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor',
+        'customRequirements', 'status', 'quotedPrice', 'downPayment',
+        'remainingPayment', 'fulfillmentType', 'location', 'reminderEnabled',
+        'reminderTiming', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
+      ];
+      let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
+      let validFulfillment = ['Pickup', 'Delivery'];
+      let validReminderTimings = ['on_time', '15_min', '1_hour', '2_hours', '1_day'];
+
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'status', 'quotedPrice', 'createdAt']) &&
+        // Required field validations
+        data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 150 &&
+        isValidTimestampOrIsoDate(data.deliveryDate) &&
+        data.cakeType is string && data.cakeType.size() > 0 && data.cakeType.size() <= 100 &&
+        data.shape is string && data.shape.size() > 0 && data.shape.size() <= 50 &&
+        data.flavor is string && data.flavor.size() > 0 && data.flavor.size() <= 100 &&
+        data.status in validStatuses &&
+        data.quotedPrice is number && data.quotedPrice >= 0 && data.quotedPrice <= 1000000 &&
+        isValidTimestampOrIsoDate(data.createdAt) &&
+        // Optional field validations
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('customRequirements' in data) || (data.customRequirements is string && data.customRequirements.size() <= 3000)) &&
+        (!('downPayment' in data) || (data.downPayment is number && data.downPayment >= 0 && data.downPayment <= data.quotedPrice)) &&
+        (!('remainingPayment' in data) || (data.remainingPayment is number && data.remainingPayment >= 0 && data.remainingPayment <= 1000000)) &&
+        (!('fulfillmentType' in data) || data.fulfillmentType in validFulfillment) &&
+        (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
+        (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
+        (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&
+        (!('addons' in data) || (data.addons is list && data.addons.size() <= 30)) &&
+        (!('referenceImages' in data) || (data.referenceImages is list && data.referenceImages.size() <= 10)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
+        (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid));
+    }
+
+    // ===============================================================
+    // Domain Validators: General Requirements
+    // ===============================================================
+
+    function isValidRequirement(data) {
+      let allowed = ['id', 'title', 'category', 'isCompleted', 'orderId', 'createdAt', 'updatedAt', 'userId'];
+      let validCategories = ['Ingredients', 'Packaging', 'Tools', 'Add-ons'];
+
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['title', 'category', 'isCompleted', 'createdAt']) &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 200 &&
+        data.category in validCategories &&
+        data.isCompleted is bool &&
+        isValidTimestampOrIsoDate(data.createdAt) &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
+        (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid));
+    }
+
+    // ===============================================================
+    // Security Rules Match Blocks
+    // ===============================================================
+
+    // Root-level default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------
+    // User Profile Documents
+    // -------------------------------------------------------------
+    match /users/{userId} {
+      // Only the profile owner can read their profile (protects PII such as email)
+      allow read: if isOwner(userId);
+
+      // Only the owner can create their profile with valid initial schema
+      allow create: if isOwner(userId) &&
+        isValidUser(request.resource.data);
+
+      // Only the owner can update their profile; createdAt is immutable
+      allow update: if isOwner(userId) &&
+        isValidUser(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt']);
+
+      // Profile deletion restricted to the account owner
+      allow delete: if isOwner(userId);
+
+      // -----------------------------------------------------------
+      // Orders Subcollection: /users/{userId}/orders/{orderId}
+      // -----------------------------------------------------------
+      match /orders/{orderId} {
+        // Only the bakery owner can read their orders
+        allow read: if isOwner(userId);
+
+        // Create order: user must be authenticated owner and submit valid order schema
+        allow create: if isOwner(userId) &&
+          isValidOrder(request.resource.data);
+
+        // Update order: user must be authenticated owner, validate entire schema,
+        // and protect immutable fields (createdAt, id, userId)
+        allow update: if isOwner(userId) &&
+          isValidOrder(request.resource.data) &&
+          areImmutableFieldsUnchanged(['createdAt', 'id', 'userId']);
+
+        // Delete order: only the owner
+        allow delete: if isOwner(userId);
+      }
+
+      // -----------------------------------------------------------
+      // Requirements Subcollection: /users/{userId}/requirements/{reqId}
+      // -----------------------------------------------------------
+      match /requirements/{reqId} {
+        // Only the bakery owner can read their business requirements / checklist
+        allow read: if isOwner(userId);
+
+        // Create requirement: must be authenticated owner and meet schema requirements
+        allow create: if isOwner(userId) &&
+          isValidRequirement(request.resource.data);
+
+        // Update requirement: must validate schema and preserve immutable fields
+        allow update: if isOwner(userId) &&
+          isValidRequirement(request.resource.data) &&
+          areImmutableFieldsUnchanged(['createdAt', 'id', 'userId']);
+
+        // Delete requirement: only the owner
+        allow delete: if isOwner(userId);
+      }
+    }
+  }
+}
+

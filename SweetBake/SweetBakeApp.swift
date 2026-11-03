@@ -24,6 +24,10 @@ struct SweetBakeApp: App {
         }
     }()
     
+    init() {
+        FirebaseManager.shared.configure()
+    }
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
