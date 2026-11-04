@@ -458,15 +458,65 @@ export default function App() {
     await checkReminders();
   };
 
-  const handleDeleteExpense = async (id: string) => {
+  const handleDeleteExpense = async (transactionOrExpenseId: string) => {
     triggerHaptic.light();
-    const target = expenses.find((e) => e.id === id || e.id === `exp-${id}`);
-    const targetId = target ? target.id : id;
-    const updated = expenses.filter((e) => e.id !== targetId);
-    setExpenses(updated);
-    FirestoreService.deleteExpense(targetId).catch((err) =>
+    // Normalize ID by stripping known prefixes
+    const cleanId = transactionOrExpenseId.replace(/^(exp-|req-exp-)/, '');
+
+    // 1. Remove from dedicated `/expenses` state
+    const targetExp = expenses.find(
+      (e) => e.id === cleanId || e.id === transactionOrExpenseId || e.id === `exp-${cleanId}`
+    );
+    const targetExpId = targetExp ? targetExp.id : cleanId;
+    const updatedExpenses = expenses.filter(
+      (e) => e.id !== targetExpId && e.id !== cleanId && e.id !== transactionOrExpenseId
+    );
+    setExpenses(updatedExpenses);
+
+    FirestoreService.deleteExpense(targetExpId).catch((err) =>
       console.warn('Failed to delete expense from Firestore:', err)
     );
+
+    // 2. Also remove from order.expenses if it originated from an order
+    const hasOrderExpense = orders.some(
+      (o) => Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId)
+    );
+    if (hasOrderExpense) {
+      const updatedOrders = orders.map((o) => {
+        if (Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId)) {
+          const filtered = o.expenses.filter((e) => e.id !== cleanId && e.id !== targetExpId);
+          const newOrder = { ...o, expenses: filtered };
+          FirestoreService.saveOrder(newOrder).catch(() => {});
+          return newOrder;
+        }
+        return o;
+      });
+      setOrders(updatedOrders);
+      await StorageService.saveOrders(updatedOrders);
+    }
+
+    // 3. If it originated from a requirement/checklist expense (req-exp-...), reset requirement expense fields
+    if (transactionOrExpenseId.startsWith('req-exp-') || cleanId.startsWith('req-') || cleanId.startsWith('addon-')) {
+      const targetReqId = transactionOrExpenseId.startsWith('req-exp-')
+        ? transactionOrExpenseId.replace(/^req-exp-/, '')
+        : cleanId;
+      const targetReq = requirements.find((r) => r.id === targetReqId || r.reqId === targetReqId);
+      if (targetReq && (targetReq.expenseAmount || targetReq.expenseDate)) {
+        const updatedReqs = requirements.map((r) => {
+          if (r.id === targetReqId || r.reqId === targetReqId) {
+            const { expenseAmount, expenseDate, ...rest } = r;
+            return rest;
+          }
+          return r;
+        });
+        setRequirements(updatedReqs);
+        await StorageService.saveRequirements(updatedReqs);
+        const cleaned = updatedReqs.find((r) => r.id === targetReqId || r.reqId === targetReqId);
+        if (cleaned) {
+          FirestoreService.saveRequirement(cleaned).catch(() => {});
+        }
+      }
+    }
   };
 
   return (

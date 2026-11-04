@@ -518,7 +518,6 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
                   style={styles.deleteExpenseBtn}
                   onPress={() => {
                     triggerHaptic.medium();
-                    const rawExpenseId = item.id.replace(/^exp-/, '');
                     Alert.alert(
                       'Delete Expense',
                       `Are you sure you want to delete this expense of $${item.amount.toFixed(2)} (${item.title})?`,
@@ -529,7 +528,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
                           style: 'destructive',
                           onPress: () => {
                             triggerHaptic.light();
-                            onDeleteExpense(rawExpenseId);
+                            onDeleteExpense(item.id);
                           },
                         },
                       ]
