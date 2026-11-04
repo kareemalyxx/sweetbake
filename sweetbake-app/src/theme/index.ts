@@ -1,5 +1,4 @@
 export interface ThemePalette {
-  isDark: boolean;
   colors: {
     // Brand pink & pastel tones
     blushPink: string;
@@ -46,8 +45,7 @@ export interface ThemePalette {
   };
 }
 
-export const LightTheme: ThemePalette = {
-  isDark: false,
+export const Theme: ThemePalette = {
   colors: {
     blushPink: '#FAE4E8',
     pastelRose: '#F4B8C4',
@@ -89,61 +87,5 @@ export const LightTheme: ThemePalette = {
   },
 };
 
-export const DarkTheme: ThemePalette = {
-  isDark: true,
-  colors: {
-    blushPink: '#3A2730',
-    pastelRose: '#E297A6',
-    deepRose: '#F080A4',
-    roseGold: '#D89BA4',
+export const LightTheme = Theme;
 
-    background: '#161318',
-    card: '#241F27',
-    surfaceElevated: '#2E2733',
-    cream: '#161318',
-    warmIvory: '#201A24',
-    white: '#241F27',
-
-    lavenderLight: '#2C2237',
-    lavenderAccent: '#BCA3E5',
-    softLilac: '#C7B0E6',
-
-    status: {
-      pending: '#483318',
-      pendingDark: '#FFAE52',
-      baking: '#1B374D',
-      bakingDark: '#79C1F8',
-      decorating: '#371F52',
-      decoratingDark: '#C084FC',
-      delivered: '#153C24',
-      deliveredDark: '#56DF82',
-    },
-
-    textDark: '#F7EFF4',
-    textMauve: '#DCCCD9',
-    textSecondary: '#A99BA6',
-    border: '#453540',
-  },
-  borderRadius: {
-    card: 20,
-    button: 16,
-    pill: 12,
-    input: 14,
-  },
-};
-
-// Global active theme reference that components read from:
-// It dynamically proxies color lookups to the currently active palette
-let _activeTheme: ThemePalette = LightTheme;
-
-export const setActiveTheme = (theme: ThemePalette) => {
-  _activeTheme = theme;
-  Object.assign(Theme.colors, theme.colors);
-  Theme.isDark = theme.isDark;
-};
-
-export const Theme: ThemePalette = {
-  isDark: false,
-  colors: { ...LightTheme.colors },
-  borderRadius: { ...LightTheme.borderRadius },
-};

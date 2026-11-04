@@ -16,7 +16,7 @@ import { NotificationService, InAppNotification } from './src/services/notificat
 import { AuthService } from './src/services/auth';
 import { AuthModal } from './src/components/AuthModal';
 import { User } from 'firebase/auth';
-import { LightTheme, DarkTheme, Theme, setActiveTheme } from './src/theme';
+import { Theme } from './src/theme';
 import { triggerHaptic } from './src/services/haptics';
 
 // Screens
@@ -28,10 +28,6 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Checklist'>('Orders');
   const [orders, setOrders] = useState<CakeOrder[]>([]);
   const [requirements, setRequirements] = useState<GeneralRequirement[]>([]);
-
-  // Dark Mode State - updates both local state and the global Theme proxy
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const currentTheme = isDarkMode ? DarkTheme : LightTheme;
 
   // In-App Notification Center
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
@@ -67,15 +63,6 @@ export default function App() {
     const all = await NotificationService.getAllReminders();
     setDueNotifications(due);
     setAllReminders(all);
-  };
-
-  const toggleDarkMode = () => {
-    triggerHaptic.selection();
-    const nextMode = !isDarkMode;
-    const nextTheme = nextMode ? DarkTheme : LightTheme;
-    setActiveTheme(nextTheme);
-    setIsDarkMode(nextMode);
-    setTick((t) => t + 1);
   };
 
   // Orders State Handlers
@@ -247,18 +234,18 @@ export default function App() {
     <SafeAreaView
       style={[
         styles.safeArea,
-        { backgroundColor: currentTheme.colors.background },
+        { backgroundColor: Theme.colors.background },
       ]}
     >
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
+      <StatusBar barStyle="dark-content" />
 
-      {/* Main App Bar with Dark Mode Toggle */}
+      {/* Main App Bar */}
       <View
         style={[
           styles.topBar,
           {
-            backgroundColor: currentTheme.colors.background,
-            borderBottomColor: currentTheme.colors.border,
+            backgroundColor: Theme.colors.background,
+            borderBottomColor: Theme.colors.border,
           },
         ]}
       >
@@ -266,14 +253,14 @@ export default function App() {
           <Text style={styles.brandEmoji}>🎂</Text>
           <View>
             <Text
-              style={[styles.brandTitle, { color: currentTheme.colors.textDark }]}
+              style={[styles.brandTitle, { color: Theme.colors.textDark }]}
             >
               SweetBake Studio
             </Text>
             <Text
               style={[
                 styles.brandSubtitle,
-                { color: currentTheme.colors.textSecondary },
+                { color: Theme.colors.textSecondary },
               ]}
             >
               Single Bakery Kitchen
@@ -281,15 +268,15 @@ export default function App() {
           </View>
         </View>
 
-        {/* Right Action Icons: Dark Mode Toggle & Bell Reminder Notification */}
+        {/* Right Action Icons: Profile & Bell Reminder Notification */}
         <View style={styles.headerRightActions}>
           {/* User Profile / Login Button */}
           <TouchableOpacity
             style={[
               styles.actionIconButton,
               {
-                backgroundColor: currentTheme.colors.card,
-                borderColor: currentUser ? '#2E7D32' : currentTheme.colors.border,
+                backgroundColor: Theme.colors.card,
+                borderColor: currentUser ? '#2E7D32' : Theme.colors.border,
               },
             ]}
             onPress={() => {
@@ -300,25 +287,7 @@ export default function App() {
             <Ionicons
               name={currentUser ? 'person-circle' : 'person-circle-outline'}
               size={20}
-              color={currentUser ? '#2E7D32' : currentTheme.colors.textDark}
-            />
-          </TouchableOpacity>
-
-          {/* Dark Mode Toggle Pill */}
-          <TouchableOpacity
-            style={[
-              styles.actionIconButton,
-              {
-                backgroundColor: currentTheme.colors.card,
-                borderColor: currentTheme.colors.border,
-              },
-            ]}
-            onPress={toggleDarkMode}
-          >
-            <Ionicons
-              name={isDarkMode ? 'sunny' : 'moon'}
-              size={18}
-              color={isDarkMode ? '#F59E0B' : currentTheme.colors.textDark}
+              color={currentUser ? '#2E7D32' : Theme.colors.textDark}
             />
           </TouchableOpacity>
 
@@ -327,8 +296,8 @@ export default function App() {
             style={[
               styles.actionIconButton,
               {
-                backgroundColor: currentTheme.colors.card,
-                borderColor: currentTheme.colors.border,
+                backgroundColor: Theme.colors.card,
+                borderColor: Theme.colors.border,
               },
             ]}
             onPress={() => {
@@ -341,15 +310,15 @@ export default function App() {
               size={19}
               color={
                 dueNotifications.length > 0
-                  ? currentTheme.colors.deepRose
-                  : currentTheme.colors.textDark
+                  ? Theme.colors.deepRose
+                  : Theme.colors.textDark
               }
             />
             {dueNotifications.length > 0 && (
               <View
                 style={[
                   styles.bellBadge,
-                  { backgroundColor: currentTheme.colors.deepRose },
+                  { backgroundColor: Theme.colors.deepRose },
                 ]}
               >
                 <Text style={styles.bellBadgeText}>{dueNotifications.length}</Text>
@@ -363,7 +332,7 @@ export default function App() {
       <View
         style={[
           styles.screenContainer,
-          { backgroundColor: currentTheme.colors.background },
+          { backgroundColor: Theme.colors.background },
         ]}
       >
         {activeTab === 'Orders' && (
@@ -398,8 +367,8 @@ export default function App() {
         style={[
           styles.tabBar,
           {
-            backgroundColor: currentTheme.colors.card,
-            borderTopColor: currentTheme.colors.border,
+            backgroundColor: Theme.colors.card,
+            borderTopColor: Theme.colors.border,
           },
         ]}
       >
@@ -415,16 +384,16 @@ export default function App() {
             size={22}
             color={
               activeTab === 'Orders'
-                ? currentTheme.colors.deepRose
-                : currentTheme.colors.textSecondary
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
             }
           />
           <Text
             style={[
               styles.tabLabel,
-              { color: currentTheme.colors.textSecondary },
+              { color: Theme.colors.textSecondary },
               activeTab === 'Orders' && {
-                color: currentTheme.colors.deepRose,
+                color: Theme.colors.deepRose,
                 fontWeight: '800',
               },
             ]}
@@ -445,16 +414,16 @@ export default function App() {
             size={22}
             color={
               activeTab === 'Schedule'
-                ? currentTheme.colors.deepRose
-                : currentTheme.colors.textSecondary
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
             }
           />
           <Text
             style={[
               styles.tabLabel,
-              { color: currentTheme.colors.textSecondary },
+              { color: Theme.colors.textSecondary },
               activeTab === 'Schedule' && {
-                color: currentTheme.colors.deepRose,
+                color: Theme.colors.deepRose,
                 fontWeight: '800',
               },
             ]}
@@ -475,16 +444,16 @@ export default function App() {
             size={22}
             color={
               activeTab === 'Checklist'
-                ? currentTheme.colors.deepRose
-                : currentTheme.colors.textSecondary
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
             }
           />
           <Text
             style={[
               styles.tabLabel,
-              { color: currentTheme.colors.textSecondary },
+              { color: Theme.colors.textSecondary },
               activeTab === 'Checklist' && {
-                color: currentTheme.colors.deepRose,
+                color: Theme.colors.deepRose,
                 fontWeight: '800',
               },
             ]}
@@ -503,15 +472,15 @@ export default function App() {
         <SafeAreaView
           style={[
             styles.notifModalContainer,
-            { backgroundColor: currentTheme.colors.background },
+            { backgroundColor: Theme.colors.background },
           ]}
         >
           <View
             style={[
               styles.notifHeader,
               {
-                backgroundColor: currentTheme.colors.card,
-                borderBottomColor: currentTheme.colors.border,
+                backgroundColor: Theme.colors.card,
+                borderBottomColor: Theme.colors.border,
               },
             ]}
           >
@@ -519,7 +488,7 @@ export default function App() {
               <Text
                 style={[
                   styles.notifHeaderTitle,
-                  { color: currentTheme.colors.textDark },
+                  { color: Theme.colors.textDark },
                 ]}
               >
                 Order Alerts & Reminders
@@ -527,7 +496,7 @@ export default function App() {
               <Text
                 style={[
                   styles.notifHeaderSubtitle,
-                  { color: currentTheme.colors.textSecondary },
+                  { color: Theme.colors.textSecondary },
                 ]}
               >
                 {dueNotifications.length} active alert{dueNotifications.length === 1 ? '' : 's'}
@@ -536,11 +505,11 @@ export default function App() {
             <TouchableOpacity
               style={[
                 styles.notifCloseBtn,
-                { backgroundColor: currentTheme.colors.warmIvory },
+                { backgroundColor: Theme.colors.warmIvory },
               ]}
               onPress={() => setShowNotificationModal(false)}
             >
-              <Ionicons name="close" size={22} color={currentTheme.colors.textDark} />
+              <Ionicons name="close" size={22} color={Theme.colors.textDark} />
             </TouchableOpacity>
           </View>
 
@@ -550,12 +519,12 @@ export default function App() {
                 <Ionicons
                   name="notifications-off-outline"
                   size={44}
-                  color={currentTheme.colors.softLilac}
+                  color={Theme.colors.softLilac}
                 />
                 <Text
                   style={[
                     styles.emptyNotifTitle,
-                    { color: currentTheme.colors.textDark },
+                    { color: Theme.colors.textDark },
                   ]}
                 >
                   No Reminders Scheduled
@@ -563,7 +532,7 @@ export default function App() {
                 <Text
                   style={[
                     styles.emptyNotifText,
-                    { color: currentTheme.colors.textSecondary },
+                    { color: Theme.colors.textSecondary },
                   ]}
                 >
                   Turn on "Order Reminder Notification" in any order to receive
@@ -586,11 +555,11 @@ export default function App() {
                       style={[
                         styles.notifCard,
                         {
-                          backgroundColor: currentTheme.colors.card,
-                          borderColor: currentTheme.colors.border,
+                          backgroundColor: Theme.colors.card,
+                          borderColor: Theme.colors.border,
                         },
                         isDue && {
-                          borderColor: currentTheme.colors.deepRose,
+                          borderColor: Theme.colors.deepRose,
                           borderWidth: 1.5,
                         },
                         notif.isRead && styles.notifCardRead,
@@ -602,8 +571,8 @@ export default function App() {
                             style={[
                               styles.fulfillmentTag,
                               notif.fulfillmentType === 'Delivery'
-                                ? { backgroundColor: currentTheme.colors.deepRose }
-                                : { backgroundColor: currentTheme.colors.softLilac },
+                                ? { backgroundColor: Theme.colors.deepRose }
+                                : { backgroundColor: Theme.colors.softLilac },
                             ]}
                           >
                             <Ionicons
@@ -624,8 +593,8 @@ export default function App() {
                             style={[
                               styles.timingBadge,
                               {
-                                backgroundColor: currentTheme.colors.warmIvory,
-                                color: currentTheme.colors.textSecondary,
+                                backgroundColor: Theme.colors.warmIvory,
+                                color: Theme.colors.textSecondary,
                               },
                             ]}
                           >
@@ -642,7 +611,7 @@ export default function App() {
                       <Text
                         style={[
                           styles.notifCustomer,
-                          { color: currentTheme.colors.textDark },
+                          { color: Theme.colors.textDark },
                         ]}
                       >
                         {notif.customerName}
@@ -650,7 +619,7 @@ export default function App() {
                       <Text
                         style={[
                           styles.notifMessage,
-                          { color: currentTheme.colors.textSecondary },
+                          { color: Theme.colors.textSecondary },
                         ]}
                       >
                         {notif.message}
@@ -658,7 +627,7 @@ export default function App() {
                       <Text
                         style={[
                           styles.notifTime,
-                          { color: currentTheme.colors.textDark },
+                          { color: Theme.colors.textDark },
                         ]}
                       >
                         Scheduled for: {orderDate}
@@ -669,12 +638,12 @@ export default function App() {
                           <Ionicons
                             name="location-outline"
                             size={12}
-                            color={currentTheme.colors.textSecondary}
+                            color={Theme.colors.textSecondary}
                           />
                           <Text
                             style={[
                               styles.notifLocationText,
-                              { color: currentTheme.colors.textSecondary },
+                              { color: Theme.colors.textSecondary },
                             ]}
                             numberOfLines={1}
                           >
@@ -687,7 +656,7 @@ export default function App() {
                         <TouchableOpacity
                           style={[
                             styles.dismissBtn,
-                            { backgroundColor: currentTheme.colors.deepRose },
+                            { backgroundColor: Theme.colors.deepRose },
                           ]}
                           onPress={() => handleDismissNotification(notif.id)}
                         >
