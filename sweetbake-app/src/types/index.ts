@@ -17,6 +17,7 @@ export interface CakeOrder {
   id: string;
   customerName: string;
   customerPhone?: string; // Client phone number for WhatsApp reminders & updates
+  customerInstagram?: string; // Client Instagram username or handle (e.g. @username or username)
   deliveryDate: string; // ISO String
   cakeType: string;
   shape: string;

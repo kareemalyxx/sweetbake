@@ -128,7 +128,7 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       let allowed = [
-        'id', 'customerName', 'customerPhone', 'deliveryDate', 'cakeType', 'shape', 'flavor',
+        'id', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'shape', 'flavor',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location',
         'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
@@ -162,6 +162,7 @@ service cloud.firestore {
         (!('deliveryPhone' in data) || (data.deliveryPhone is string && data.deliveryPhone.size() <= 40)) &&
         (!('deliveryHandoverTime' in data) || isValidTimestampOrIsoDate(data.deliveryHandoverTime)) &&
         (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
+        (!('customerInstagram' in data) || (data.customerInstagram is string && data.customerInstagram.size() <= 60)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminders' in data) || (data.reminders is map && data.reminders.size() <= 20)) &&
         (!('addons' in data) || (data.addons is map && data.addons.size() <= 30) || (data.addons is list && data.addons.size() <= 30)) &&

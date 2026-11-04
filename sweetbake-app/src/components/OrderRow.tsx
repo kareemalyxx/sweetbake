@@ -213,6 +213,30 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               <Ionicons name="copy-outline" size={17} color={Theme.colors.textSecondary} />
             </TouchableOpacity>
 
+            {/* Quick Instagram Share / Profile Trigger */}
+            <TouchableOpacity
+              style={styles.instagramIconBtn}
+              onPress={() => {
+                triggerHaptic.medium();
+                NotificationService.sendInstagramNotification({
+                  customerName: order.customerName,
+                  customerPhone: order.customerPhone,
+                  customerInstagram: order.customerInstagram,
+                  deliveryDate: order.deliveryDate,
+                  cakeType: order.cakeType,
+                  shape: order.shape,
+                  flavor: order.flavor,
+                  fulfillmentType: order.fulfillmentType,
+                  location: order.location,
+                  quotedPrice: order.quotedPrice,
+                  remainingPayment: remaining,
+                });
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="logo-instagram" size={18} color="#E1306C" />
+            </TouchableOpacity>
+
             {/* Quick WhatsApp Reminder Trigger */}
             <TouchableOpacity
               style={styles.whatsAppIconBtn}
@@ -468,6 +492,9 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   whatsAppIconBtn: {
+    padding: 6,
+  },
+  instagramIconBtn: {
     padding: 6,
   },
   deleteButton: {

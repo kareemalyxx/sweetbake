@@ -65,7 +65,7 @@ export const NotificationService = {
     });
 
     const lines = [
-      `🎂 *Kake Studio Order Update*`,
+      `🎂 *Kake Order Update*`,
       `Hi ${order.customerName}! Here are the details for your custom cake commission:`,
       ``,
       `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${order.flavor || 'Custom'})`,
@@ -86,7 +86,7 @@ export const NotificationService = {
 
     lines.push(`🔗 *InstaPay:* https://ipn.eg/S/danawaleed92646/instapay/907lRy`);
     lines.push(``);
-    lines.push(`Let us know if you need any adjustments. Thank you for baking with Kake Studio!`);
+    lines.push(`Let us know if you need any adjustments. Thank you for baking with Kake!`);
 
     return lines.join('\n');
   },
@@ -156,6 +156,57 @@ export const NotificationService = {
       );
     }
   },
+  /**
+   * Open Instagram DM / Profile with message copied to clipboard
+   */
+  async sendInstagramNotification(order: {
+    customerName: string;
+    customerPhone?: string;
+    customerInstagram?: string;
+    deliveryDate: string;
+    cakeType?: string;
+    shape?: string;
+    flavor?: string;
+    fulfillmentType?: string;
+    location?: string;
+    quotedPrice?: number;
+    remainingPayment?: number;
+  }): Promise<void> {
+    const message = this.buildOrderMessage(order);
+    try {
+      Clipboard.setString(message);
+    } catch (e) {
+      console.warn('Could not copy to clipboard before opening Instagram:', e);
+    }
+
+    const cleanUsername = (order.customerInstagram || '').trim().replace(/^@+/, '');
+    const appUrl = cleanUsername
+      ? `instagram://user?username=${cleanUsername}`
+      : `instagram://direct_v2`;
+    const webUrl = cleanUsername
+      ? `https://www.instagram.com/${cleanUsername}/`
+      : `https://www.instagram.com/direct/inbox/`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(appUrl);
+      if (canOpen) {
+        await Linking.openURL(appUrl);
+      } else {
+        await Linking.openURL(webUrl);
+      }
+      Alert.alert(
+        'Message Copied to Clipboard!',
+        'Your order summary has been copied. Simply paste (Cmd/Tap & Hold -> Paste) into your Instagram chat with the customer.'
+      );
+    } catch (err) {
+      console.warn('Failed to open Instagram:', err);
+      Alert.alert(
+        'Instagram Not Available',
+        'Could not open Instagram. The order summary has been copied to your clipboard so you can paste it manually.'
+      );
+    }
+  },
+
   getTimingOffsetMs(timing: ReminderTiming): number {
     switch (timing) {
       case '15_min':

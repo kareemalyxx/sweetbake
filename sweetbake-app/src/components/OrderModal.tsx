@@ -104,9 +104,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [availableShapes, setAvailableShapes] = useState<string[]>(CAKE_SHAPES);
   const [availableAddons, setAvailableAddons] = useState<string[]>(CAKE_ADDONS);
 
-  // Client Phone Number (for WhatsApp notification)
+  // Client Phone Number (for WhatsApp notification) & Instagram
   const [customerDialCode, setCustomerDialCode] = useState('+20');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerInstagram, setCustomerInstagram] = useState('');
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearch, setCountrySearch] = useState('');
 
@@ -147,6 +148,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   useEffect(() => {
     if (orderToEdit) {
       setCustomerName(orderToEdit.customerName);
+      setCustomerInstagram(orderToEdit.customerInstagram || '');
       const parsed = parsePhoneCountry(orderToEdit.customerPhone);
       setCustomerDialCode(parsed.dialCode);
       setCustomerPhone(parsed.nationalNumber);
@@ -188,6 +190,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     } else {
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerInstagram('');
       setCakeType(availableCakeTypes[0] || CAKE_TYPES[0]);
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
@@ -554,6 +557,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       id: orderToEdit ? orderToEdit.id : undefined,
       customerName: customerName.trim(),
       customerPhone: fullPhone,
+      customerInstagram: customerInstagram.trim() || undefined,
       cakeType,
       shape,
       flavor,
@@ -652,6 +656,19 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   keyboardType="phone-pad"
                   value={customerPhone}
                   onChangeText={setCustomerPhone}
+                />
+              </View>
+
+              <View style={styles.socialInputRow}>
+                <Ionicons name="logo-instagram" size={18} color="#E1306C" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.socialInput}
+                  placeholder="Instagram handle (e.g. @username)"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={customerInstagram}
+                  onChangeText={setCustomerInstagram}
                 />
               </View>
             </View>
@@ -1258,7 +1275,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       )}
                     </View>
 
-                    {/* Direct WhatsApp Test / Send Option & Copy to Clipboard */}
+                    {/* Direct WhatsApp, Instagram, & Copy to Clipboard Actions */}
                     <View style={styles.shareActionRow}>
                       <TouchableOpacity
                         style={styles.directWhatsAppBtn}
@@ -1281,8 +1298,31 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                           });
                         }}
                       >
-                        <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
                         <Text style={styles.directWhatsAppText}>WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.directInstagramBtn}
+                        onPress={() => {
+                          triggerHaptic.medium();
+                          NotificationService.sendInstagramNotification({
+                            customerName: customerName.trim() || 'Valued Customer',
+                            customerPhone: customerPhone.trim() ? `${customerDialCode}${customerPhone.trim()}` : '',
+                            customerInstagram: customerInstagram.trim(),
+                            deliveryDate: deliveryDate.toISOString(),
+                            cakeType,
+                            shape,
+                            flavor,
+                            fulfillmentType,
+                            location: location.trim(),
+                            quotedPrice: totalVal,
+                            remainingPayment: remainingVal,
+                          });
+                        }}
+                      >
+                        <Ionicons name="logo-instagram" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.directInstagramText}>Instagram</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
@@ -1306,8 +1346,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                           });
                         }}
                       >
-                        <Ionicons name="copy-outline" size={16} color={Theme.colors.textDark} style={{ marginRight: 6 }} />
-                        <Text style={styles.copyMessageText}>Copy Details</Text>
+                        <Ionicons name="copy-outline" size={15} color={Theme.colors.textDark} style={{ marginRight: 4 }} />
+                        <Text style={styles.copyMessageText}>Copy</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2416,10 +2456,26 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 4,
   },
+  socialInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  socialInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Theme.colors.textDark,
+  },
   shareActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     marginTop: 12,
   },
   directWhatsAppBtn: {
@@ -2430,11 +2486,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#25D366',
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
   },
   directWhatsAppText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  directInstagramBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#E1306C',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+  },
+  directInstagramText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '800',
   },
   copyMessageBtn: {
@@ -2445,13 +2516,13 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.cream,
     borderRadius: 12,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#E8DED8',
   },
   copyMessageText: {
     color: Theme.colors.textDark,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
   },
   titleWithAction: {
