@@ -180,29 +180,49 @@ export const NotificationService = {
     }
 
     const cleanUsername = (order.customerInstagram || '').trim().replace(/^@+/, '');
-    const appUrl = cleanUsername
-      ? `instagram://user?username=${cleanUsername}`
-      : `instagram://direct_v2`;
-    const webUrl = cleanUsername
-      ? `https://www.instagram.com/${cleanUsername}/`
+    
+    // Direct chat deep links:
+    // 1. App direct message thread / inbox: instagram://direct_v2, instagram://shares, or instagram://user?username=...
+    // 2. Web direct chat fallback: https://ig.me/m/{username} (officially opens direct chat on both mobile & desktop)
+    const directChatWebUrl = cleanUsername
+      ? `https://ig.me/m/${cleanUsername}`
       : `https://www.instagram.com/direct/inbox/`;
 
+    const appUrls = cleanUsername
+      ? [
+          `instagram://shares?recipient_users=${cleanUsername}`,
+          `instagram://user?username=${cleanUsername}`,
+          `instagram://direct_v2`,
+        ]
+      : [`instagram://direct_v2`];
+
     try {
-      const canOpen = await Linking.canOpenURL(appUrl);
-      if (canOpen) {
-        await Linking.openURL(appUrl);
-      } else {
-        await Linking.openURL(webUrl);
+      let opened = false;
+      for (const url of appUrls) {
+        const canOpen = await Linking.canOpenURL(url).catch(() => false);
+        if (canOpen) {
+          await Linking.openURL(url);
+          opened = true;
+          break;
+        }
       }
+
+      if (!opened) {
+        // Fallback to direct chat web link: https://ig.me/m/<username> redirects straight into Instagram DM
+        await Linking.openURL(directChatWebUrl);
+      }
+
       Alert.alert(
         'Message Copied to Clipboard!',
-        'Your order summary has been copied. Simply paste (Cmd/Tap & Hold -> Paste) into your Instagram chat with the customer.'
+        cleanUsername
+          ? `Opening chat with @${cleanUsername}. Tap and hold the message field to paste the order details.`
+          : 'Opening Instagram Direct. Tap and hold the message field to paste the order details.'
       );
     } catch (err) {
       console.warn('Failed to open Instagram:', err);
       Alert.alert(
-        'Instagram Not Available',
-        'Could not open Instagram. The order summary has been copied to your clipboard so you can paste it manually.'
+        'Instagram Chat',
+        'Your order summary has been copied to your clipboard so you can paste it directly into Instagram.'
       );
     }
   },
