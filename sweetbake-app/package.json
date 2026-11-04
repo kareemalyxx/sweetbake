@@ -11,6 +11,9 @@
     "expo-image-picker": "~58.0.10",
     "expo-status-bar": "~58.0.4",
     "firebase": "^13.2.0",
+    "hermes-parser": "0.20.1",
+    "metro": "0.81.3",
+    "metro-config": "0.81.3",
     "react": "19.3.0",
     "react-native": "0.88.1"
   },
