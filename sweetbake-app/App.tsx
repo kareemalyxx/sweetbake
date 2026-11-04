@@ -10,7 +10,7 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus } from './src/types';
+import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus, OrderExpense } from './src/types';
 import { StorageService } from './src/services/storage';
 import { NotificationService, InAppNotification } from './src/services/notifications';
 import { AuthService } from './src/services/auth';
@@ -269,10 +269,29 @@ export default function App() {
   };
 
   // Requirements State Handlers - strictly targets ONLY the exact item matching id
-  const handleToggleRequirement = async (id: string) => {
-    const updated = requirements.map((r) =>
-      (r.id === id || r.reqId === id) ? { ...r, isCompleted: !r.isCompleted } : r
-    );
+  const handleToggleRequirement = async (id: string, expenseAmount?: number) => {
+    const target = requirements.find((r) => r.id === id || r.reqId === id);
+    if (!target) return;
+
+    const newCompletedStatus = !target.isCompleted;
+    const nowIso = new Date().toISOString();
+
+    const updated = requirements.map((r) => {
+      if (r.id === id || r.reqId === id) {
+        return {
+          ...r,
+          isCompleted: newCompletedStatus,
+          expenseAmount: newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0
+            ? expenseAmount
+            : r.expenseAmount,
+          expenseDate: newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0
+            ? nowIso
+            : r.expenseDate,
+        };
+      }
+      return r;
+    });
+
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
 
@@ -281,6 +300,41 @@ export default function App() {
       FirestoreService.saveRequirement(toggled).catch((e) =>
         console.warn('Failed to sync requirement to Firestore:', e)
       );
+    }
+
+    // If an expense amount was entered when completing, record it as an expense
+    if (newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0) {
+      const expenseEntry: OrderExpense = {
+        id: `exp-chk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        amount: expenseAmount,
+        notes: target.title,
+        date: nowIso,
+      };
+
+      if (target.orderId) {
+        // Link directly into the corresponding cake commission order
+        const targetOrderId = target.orderId;
+        const updatedOrders = orders.map((o) => {
+          if (o.id === targetOrderId) {
+            const currentExpenses = Array.isArray(o.expenses) ? o.expenses : [];
+            return {
+              ...o,
+              expenses: [...currentExpenses, expenseEntry],
+            };
+          }
+          return o;
+        });
+
+        setOrders(updatedOrders);
+        await StorageService.saveOrders(updatedOrders);
+
+        const updatedOrder = updatedOrders.find((o) => o.id === targetOrderId);
+        if (updatedOrder) {
+          FirestoreService.saveOrder(updatedOrder).catch((e) =>
+            console.warn('Failed to sync checklist expense to order:', e)
+          );
+        }
+      }
     }
   };
 
@@ -447,7 +501,7 @@ export default function App() {
           />
         )}
         {activeTab === 'Finances' && (
-          <FinancialSheetScreen orders={orders} />
+          <FinancialSheetScreen orders={orders} requirements={requirements} />
         )}
         {activeTab === 'Checklist' && (
           <BusinessNeedsScreen

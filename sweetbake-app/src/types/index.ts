@@ -42,5 +42,7 @@ export interface GeneralRequirement {
   category: RequirementCategory;
   isCompleted: boolean;
   orderId?: string; // Optional link to specific cake commission
+  expenseAmount?: number; // Cost recorded when requirement is completed
+  expenseDate?: string; // ISO string when the expense occurred
   createdAt: string;
 }

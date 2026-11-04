@@ -7,6 +7,8 @@ import {
   TextInput,
   TouchableOpacity,
   ScrollView,
+  Modal,
+  KeyboardAvoidingView,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -25,7 +27,7 @@ type FilterCategory = RequirementCategory | 'All';
 
 interface BusinessNeedsScreenProps {
   requirements: GeneralRequirement[];
-  onToggleRequirement: (id: string) => void;
+  onToggleRequirement: (id: string, expenseAmount?: number) => void;
   onAddRequirement: (title: string, category: RequirementCategory) => void;
   onDeleteRequirement: (id: string) => void;
   onClearCompleted: (category?: RequirementCategory) => void;
@@ -40,6 +42,10 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
 }) => {
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
   const [newTitle, setNewTitle] = useState('');
+
+  // Expense modal state when marking an item as completed
+  const [pendingCompleteItem, setPendingCompleteItem] = useState<GeneralRequirement | null>(null);
+  const [expenseInput, setExpenseInput] = useState('');
 
   // Strict per-item segregation or all items:
   const categoryItems = selectedCategory === 'All'
@@ -58,10 +64,30 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
     setNewTitle('');
   };
 
-  const handleToggle = (id: string) => {
-    triggerHaptic.medium();
+  const handleItemPress = (item: GeneralRequirement) => {
+    if (!item.isCompleted) {
+      // Prompt for expense amount when checking as true / completed
+      triggerHaptic.medium();
+      setPendingCompleteItem(item);
+      setExpenseInput('');
+    } else {
+      // Unchecking does not ask for expenses
+      triggerHaptic.light();
+      LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
+      onToggleRequirement(item.id);
+    }
+  };
+
+  const confirmCompletionWithExpense = (recordExpense: boolean) => {
+    if (!pendingCompleteItem) return;
+    const parsedAmount = recordExpense ? parseFloat(expenseInput) : undefined;
+    const validAmount = !isNaN(parsedAmount as number) && (parsedAmount as number) > 0 ? parsedAmount : undefined;
+
+    triggerHaptic.success();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.spring);
-    onToggleRequirement(id);
+    onToggleRequirement(pendingCompleteItem.id, validAmount);
+    setPendingCompleteItem(null);
+    setExpenseInput('');
   };
 
   const getCategoryIcon = (cat: FilterCategory) => {
@@ -199,7 +225,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
           <View style={[styles.row, item.isCompleted && styles.rowCompleted]}>
             <TouchableOpacity
               style={styles.checkboxTouch}
-              onPress={() => handleToggle(item.id)}
+              onPress={() => handleItemPress(item)}
             >
               <View
                 style={[
@@ -219,18 +245,27 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
                   styles.itemTitle,
                   item.isCompleted && styles.itemTitleCompleted,
                 ]}
-                onPress={() => handleToggle(item.id)}
+                onPress={() => handleItemPress(item)}
               >
                 {item.title}
               </Text>
-              <View style={styles.addonTag}>
-                <Ionicons
-                  name={getCategoryIcon(item.category)}
-                  size={10}
-                  color={Theme.colors.deepRose}
-                  style={{ marginRight: 3 }}
-                />
-                <Text style={styles.addonTagText}>{item.category}</Text>
+              <View style={styles.tagRow}>
+                <View style={styles.addonTag}>
+                  <Ionicons
+                    name={getCategoryIcon(item.category)}
+                    size={10}
+                    color={Theme.colors.deepRose}
+                    style={{ marginRight: 3 }}
+                  />
+                  <Text style={styles.addonTagText}>{item.category}</Text>
+                </View>
+
+                {item.isCompleted && typeof item.expenseAmount === 'number' && item.expenseAmount > 0 && (
+                  <View style={styles.expenseBadge}>
+                    <Ionicons name="cash-outline" size={10} color="#D97706" style={{ marginRight: 2 }} />
+                    <Text style={styles.expenseBadgeText}>${item.expenseAmount.toFixed(2)}</Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -246,6 +281,62 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
           </View>
         )}
       />
+
+      {/* Record Expense Modal on Requirement Completion */}
+      <Modal
+        visible={!!pendingCompleteItem}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPendingCompleteItem(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.expenseModalCard}>
+            <View style={styles.modalIconCircle}>
+              <Ionicons name="receipt-outline" size={28} color={Theme.colors.deepRose} />
+            </View>
+
+            <Text style={styles.modalTitle}>Record Expense?</Text>
+            <Text style={styles.modalSub}>
+              Did you pay for <Text style={{ fontWeight: '700', color: Theme.colors.textDark }}>{pendingCompleteItem?.title}</Text>? Enter the cost to log it as an expense.
+            </Text>
+
+            <View style={styles.amountInputRow}>
+              <Text style={styles.dollarSign}>$</Text>
+              <TextInput
+                style={styles.amountInput}
+                keyboardType="decimal-pad"
+                placeholder="0.00"
+                placeholderTextColor={Theme.colors.textSecondary}
+                value={expenseInput}
+                onChangeText={setExpenseInput}
+                autoFocus
+              />
+            </View>
+
+            <View style={styles.modalBtnRow}>
+              <TouchableOpacity
+                style={styles.skipBtn}
+                onPress={() => confirmCompletionWithExpense(false)}
+              >
+                <Text style={styles.skipBtnText}>No Expense ($0)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.confirmBtn,
+                  !expenseInput.trim() && { opacity: 0.6 },
+                ]}
+                onPress={() => confirmCompletionWithExpense(true)}
+              >
+                <Text style={styles.confirmBtnText}>Save Expense</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 };
@@ -397,17 +488,134 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     textDecorationLine: 'line-through',
   },
+  tagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 3,
+  },
   addonTag: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 2,
   },
   addonTagText: {
     fontSize: 10,
     fontWeight: '600',
     color: Theme.colors.deepRose,
   },
+  expenseBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  expenseBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#B45309',
+  },
   deleteBtn: {
     padding: 4,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  expenseModalCard: {
+    width: '100%',
+    maxWidth: 340,
+    backgroundColor: Theme.colors.white,
+    borderRadius: 20,
+    padding: 22,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  modalIconCircle: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Theme.colors.blushPink,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Theme.colors.textDark,
+    marginBottom: 6,
+  },
+  modalSub: {
+    fontSize: 13,
+    color: Theme.colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 18,
+    marginBottom: 16,
+  },
+  amountInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.cream,
+    borderRadius: Theme.borderRadius.input,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.pastelRose,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    width: '100%',
+    marginBottom: 20,
+  },
+  dollarSign: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Theme.colors.deepRose,
+    marginRight: 6,
+  },
+  amountInput: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Theme.colors.textDark,
+    minWidth: 80,
+    textAlign: 'left',
+  },
+  modalBtnRow: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 10,
+  },
+  skipBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.button,
+    backgroundColor: Theme.colors.cream,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  skipBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+  },
+  confirmBtn: {
+    flex: 1.3,
+    paddingVertical: 12,
+    borderRadius: Theme.borderRadius.button,
+    backgroundColor: Theme.colors.deepRose,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  confirmBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

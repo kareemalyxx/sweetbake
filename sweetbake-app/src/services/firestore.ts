@@ -264,6 +264,7 @@ export const FirestoreService = {
       reqId: reqId,
       createdAt: toFirebaseTimestamp(req.createdAt),
       updatedAt: Timestamp.now(),
+      ...(req.expenseDate ? { expenseDate: toFirebaseTimestamp(req.expenseDate) } : {}),
     };
     await setDoc(reqRef, dataToSave, { merge: true });
   },

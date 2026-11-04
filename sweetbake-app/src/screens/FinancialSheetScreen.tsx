@@ -9,12 +9,13 @@ import {
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CakeOrder, OrderExpense } from '../types';
+import { CakeOrder, OrderExpense, GeneralRequirement } from '../types';
 import { Theme } from '../theme';
 import { triggerHaptic } from '../services/haptics';
 
 interface FinancialSheetScreenProps {
   orders: CakeOrder[];
+  requirements?: GeneralRequirement[];
 }
 
 type PeriodType = 'Monthly' | 'Weekly';
@@ -32,7 +33,7 @@ interface FlattenedTransaction {
   orderId: string;
 }
 
-export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orders }) => {
+export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orders, requirements = [] }) => {
   const [period, setPeriod] = useState<PeriodType>('Monthly');
   const [filterType, setFilterType] = useState<FilterType>('All');
   const [selectedPeriodOffset, setSelectedPeriodOffset] = useState<number>(0); // 0 = current, -1 = previous, etc.
@@ -121,9 +122,38 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orde
       }
     });
 
+    // Discrete Expenses recorded from Checklist / General Requirements (e.g. ingredients, tools, packaging)
+    requirements.forEach((req) => {
+      if (req.isCompleted && typeof req.expenseAmount === 'number' && req.expenseAmount > 0) {
+        // If linked to an order that already recorded this as an order expense, avoid double counting
+        const isAlreadyInOrder = orders.some((o) =>
+          o.id === req.orderId &&
+          Array.isArray(o.expenses) &&
+          o.expenses.some((e) => e.notes === req.title && e.amount === req.expenseAmount)
+        );
+
+        if (!isAlreadyInOrder) {
+          const reqExpDate = new Date(req.expenseDate || req.createdAt);
+          if (reqExpDate >= periodRange.start && reqExpDate <= periodRange.end) {
+            list.push({
+              id: `req-exp-${req.id}`,
+              type: 'Expense',
+              date: reqExpDate,
+              dateStr: reqExpDate.toISOString(),
+              amount: req.expenseAmount,
+              title: req.title,
+              subtitle: `${req.category} Checklist Requirement`,
+              badgeText: `${req.category} Expense`,
+              orderId: req.orderId || 'general',
+            });
+          }
+        }
+      }
+    });
+
     // Sort descending by transaction date
     return list.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [orders, periodRange]);
+  }, [orders, requirements, periodRange]);
 
   // Aggregate Totals
   const totals = useMemo(() => {
@@ -678,3 +708,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
+
