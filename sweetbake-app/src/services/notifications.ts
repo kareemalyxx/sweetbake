@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking, Alert, Platform } from 'react-native';
+import { Linking, Alert, Platform, Clipboard } from 'react-native';
 import { CakeOrder, ReminderTiming } from '../types';
 
 // Safely resolve Expo Notifications with lazy loading to prevent Metro module resolution / stale cache crashes
@@ -43,9 +43,9 @@ const NOTIFICATIONS_STORAGE_KEY = '@sweetbake_reminders_v1';
 
 export const NotificationService = {
   /**
-   * Open WhatsApp with a pre-filled order reminder/update message
+   * Builds the formatted order message string for WhatsApp or copying to clipboard
    */
-  async sendWhatsAppNotification(order: {
+  buildOrderMessage(order: {
     customerName: string;
     customerPhone?: string;
     deliveryDate: string;
@@ -56,7 +56,7 @@ export const NotificationService = {
     location?: string;
     quotedPrice?: number;
     remainingPayment?: number;
-  }): Promise<void> {
+  }): string {
     const formattedDate = new Date(order.deliveryDate).toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -84,10 +84,54 @@ export const NotificationService = {
       }
     }
 
+    lines.push(`🔗 *InstaPay:* https://ipn.eg/S/danawaleed92646/instapay/907lRy`);
     lines.push(``);
-    lines.push(`Let us know if you need any adjustments. Thank you for baking with kake Studio!`);
+    lines.push(`Let us know if you need any adjustments. Thank you for baking with Kake Studio!`);
 
-    const message = lines.join('\n');
+    return lines.join('\n');
+  },
+
+  /**
+   * Copies the order update message to the system clipboard
+   */
+  async copyOrderMessage(order: {
+    customerName: string;
+    customerPhone?: string;
+    deliveryDate: string;
+    cakeType?: string;
+    shape?: string;
+    flavor?: string;
+    fulfillmentType?: string;
+    location?: string;
+    quotedPrice?: number;
+    remainingPayment?: number;
+  }): Promise<void> {
+    const message = this.buildOrderMessage(order);
+    try {
+      Clipboard.setString(message);
+      Alert.alert('Copied!', 'Order message copied to clipboard.');
+    } catch (err) {
+      console.warn('Failed to copy to clipboard:', err);
+      Alert.alert('Copy Failed', 'Unable to copy message to clipboard.');
+    }
+  },
+
+  /**
+   * Open WhatsApp with a pre-filled order reminder/update message
+   */
+  async sendWhatsAppNotification(order: {
+    customerName: string;
+    customerPhone?: string;
+    deliveryDate: string;
+    cakeType?: string;
+    shape?: string;
+    flavor?: string;
+    fulfillmentType?: string;
+    location?: string;
+    quotedPrice?: number;
+    remainingPayment?: number;
+  }): Promise<void> {
+    const message = this.buildOrderMessage(order);
     const cleanPhone = (order.customerPhone || '').replace(/[^0-9+]/g, '');
 
     // Formulate wa.me or whatsapp:// URL

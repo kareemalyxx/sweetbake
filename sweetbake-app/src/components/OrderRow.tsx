@@ -190,6 +190,29 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           )}
 
           <View style={styles.iconActionRow}>
+            {/* Quick Copy Message to Clipboard */}
+            <TouchableOpacity
+              style={styles.copyIconBtn}
+              onPress={() => {
+                triggerHaptic.light();
+                NotificationService.copyOrderMessage({
+                  customerName: order.customerName,
+                  customerPhone: order.customerPhone,
+                  deliveryDate: order.deliveryDate,
+                  cakeType: order.cakeType,
+                  shape: order.shape,
+                  flavor: order.flavor,
+                  fulfillmentType: order.fulfillmentType,
+                  location: order.location,
+                  quotedPrice: order.quotedPrice,
+                  remainingPayment: remaining,
+                });
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="copy-outline" size={17} color={Theme.colors.textSecondary} />
+            </TouchableOpacity>
+
             {/* Quick WhatsApp Reminder Trigger */}
             <TouchableOpacity
               style={styles.whatsAppIconBtn}
@@ -440,6 +463,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  copyIconBtn: {
+    padding: 6,
   },
   whatsAppIconBtn: {
     padding: 6,

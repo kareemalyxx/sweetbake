@@ -1258,31 +1258,58 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       )}
                     </View>
 
-                    {/* Direct WhatsApp Test / Send Option */}
-                    <TouchableOpacity
-                      style={styles.directWhatsAppBtn}
-                      onPress={() => {
-                        triggerHaptic.medium();
-                        const fullPhone = customerPhone.trim()
-                          ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}`
-                          : '';
-                        NotificationService.sendWhatsAppNotification({
-                          customerName: customerName.trim() || 'Valued Customer',
-                          customerPhone: fullPhone,
-                          deliveryDate: deliveryDate.toISOString(),
-                          cakeType,
-                          shape,
-                          flavor,
-                          fulfillmentType,
-                          location: location.trim(),
-                          quotedPrice: totalVal,
-                          remainingPayment: remainingVal,
-                        });
-                      }}
-                    >
-                      <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.directWhatsAppText}>Send Order Alert via WhatsApp Now</Text>
-                    </TouchableOpacity>
+                    {/* Direct WhatsApp Test / Send Option & Copy to Clipboard */}
+                    <View style={styles.shareActionRow}>
+                      <TouchableOpacity
+                        style={styles.directWhatsAppBtn}
+                        onPress={() => {
+                          triggerHaptic.medium();
+                          const fullPhone = customerPhone.trim()
+                            ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}`
+                            : '';
+                          NotificationService.sendWhatsAppNotification({
+                            customerName: customerName.trim() || 'Valued Customer',
+                            customerPhone: fullPhone,
+                            deliveryDate: deliveryDate.toISOString(),
+                            cakeType,
+                            shape,
+                            flavor,
+                            fulfillmentType,
+                            location: location.trim(),
+                            quotedPrice: totalVal,
+                            remainingPayment: remainingVal,
+                          });
+                        }}
+                      >
+                        <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                        <Text style={styles.directWhatsAppText}>WhatsApp</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.copyMessageBtn}
+                        onPress={() => {
+                          triggerHaptic.medium();
+                          const fullPhone = customerPhone.trim()
+                            ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}`
+                            : '';
+                          NotificationService.copyOrderMessage({
+                            customerName: customerName.trim() || 'Valued Customer',
+                            customerPhone: fullPhone,
+                            deliveryDate: deliveryDate.toISOString(),
+                            cakeType,
+                            shape,
+                            flavor,
+                            fulfillmentType,
+                            location: location.trim(),
+                            quotedPrice: totalVal,
+                            remainingPayment: remainingVal,
+                          });
+                        }}
+                      >
+                        <Ionicons name="copy-outline" size={16} color={Theme.colors.textDark} style={{ marginRight: 6 }} />
+                        <Text style={styles.copyMessageText}>Copy Details</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
               </View>
@@ -2389,7 +2416,14 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     marginTop: 4,
   },
+  shareActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 12,
+  },
   directWhatsAppBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2397,12 +2431,28 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
-    marginTop: 12,
   },
   directWhatsAppText: {
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '800',
+  },
+  copyMessageBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E8DED8',
+  },
+  copyMessageText: {
+    color: Theme.colors.textDark,
+    fontSize: 13,
+    fontWeight: '700',
   },
   titleWithAction: {
     flexDirection: 'row',
