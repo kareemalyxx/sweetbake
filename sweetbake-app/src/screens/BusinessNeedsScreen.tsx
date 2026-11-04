@@ -687,6 +687,8 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
                 placeholderTextColor={Theme.colors.textSecondary}
                 value={expenseInput}
                 onChangeText={setExpenseInput}
+                onSubmitEditing={() => confirmCompletionWithExpense(true)}
+                returnKeyType="done"
                 autoFocus
               />
             </View>

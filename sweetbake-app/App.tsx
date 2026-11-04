@@ -340,8 +340,11 @@ export default function App() {
         console.warn('Failed to save expense to /expenses:', e)
       );
 
+      // Update in-memory and local state for instant real-time financial tracking
+      setExpenses((prev) => [expenseEntry, ...prev.filter((e) => e.id !== expenseEntry.id)]);
+
       if (target.orderId) {
-        // Link directly into the corresponding cake commission order
+        // Link directly into the corresponding cake commission order in memory/local storage
         const targetOrderId = target.orderId;
         const updatedOrders = orders.map((o) => {
           if (o.id === targetOrderId) {
@@ -356,13 +359,6 @@ export default function App() {
 
         setOrders(updatedOrders);
         await StorageService.saveOrders(updatedOrders);
-
-        const updatedOrder = updatedOrders.find((o) => o.id === targetOrderId);
-        if (updatedOrder) {
-          FirestoreService.saveOrder(updatedOrder).catch((e) =>
-            console.warn('Failed to sync checklist expense to order:', e)
-          );
-        }
       }
     }
   };
