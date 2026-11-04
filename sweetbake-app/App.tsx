@@ -30,6 +30,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Finances' | 'Checklist'>('Orders');
   const [orders, setOrders] = useState<CakeOrder[]>([]);
   const [requirements, setRequirements] = useState<GeneralRequirement[]>([]);
+  const [expenses, setExpenses] = useState<OrderExpense[]>([]);
 
   // In-App Notification Center
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
@@ -71,12 +72,22 @@ export default function App() {
       (err) => console.warn('Firestore requirements sync notice:', err.message)
     );
 
+    const unsubscribeExpenses = FirestoreService.subscribeToExpenses(
+      (cloudExpenses) => {
+        if (cloudExpenses) {
+          setExpenses(cloudExpenses);
+        }
+      },
+      (err) => console.warn('Firestore expenses sync notice:', err.message)
+    );
+
     checkReminders();
     const interval = setInterval(checkReminders, 20000); // Check every 20 seconds
     return () => {
       clearInterval(interval);
       unsubscribeOrders();
       unsubscribeReqs();
+      unsubscribeExpenses();
     };
   }, []);
 
@@ -519,7 +530,7 @@ export default function App() {
           />
         )}
         {activeTab === 'Finances' && (
-          <FinancialSheetScreen orders={orders} requirements={requirements} />
+          <FinancialSheetScreen orders={orders} requirements={requirements} expenses={expenses} />
         )}
         {activeTab === 'Checklist' && (
           <BusinessNeedsScreen

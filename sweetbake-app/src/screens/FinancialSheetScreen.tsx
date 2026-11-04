@@ -16,6 +16,7 @@ import { triggerHaptic } from '../services/haptics';
 interface FinancialSheetScreenProps {
   orders: CakeOrder[];
   requirements?: GeneralRequirement[];
+  expenses?: OrderExpense[];
 }
 
 type PeriodType = 'Monthly' | 'Weekly';
@@ -33,7 +34,11 @@ interface FlattenedTransaction {
   orderId: string;
 }
 
-export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orders, requirements = [] }) => {
+export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
+  orders,
+  requirements = [],
+  expenses = [],
+}) => {
   const [period, setPeriod] = useState<PeriodType>('Monthly');
   const [filterType, setFilterType] = useState<FilterType>('All');
   const [selectedPeriodOffset, setSelectedPeriodOffset] = useState<number>(0); // 0 = current, -1 = previous, etc.
@@ -101,7 +106,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orde
         });
       }
 
-      // Discrete Expenses linked to this order
+      // Discrete Expenses linked to this order (from local cache/legacy if present)
       if (Array.isArray(o.expenses)) {
         o.expenses.forEach((exp: OrderExpense) => {
           const expDate = new Date(exp.date || o.createdAt);
@@ -119,6 +124,31 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({ orde
             });
           }
         });
+      }
+    });
+
+    // Dedicated /expenses collection items
+    expenses.forEach((exp: OrderExpense) => {
+      const expDate = new Date(exp.date || exp.createdAt || Date.now());
+      if (expDate >= periodRange.start && expDate <= periodRange.end) {
+        // Prevent duplicate if already added from order.expenses in local cache
+        const alreadyAdded = list.some((t) => t.id === `exp-${exp.id}` || t.id === exp.id);
+        if (!alreadyAdded) {
+          const linkedOrder = exp.orderId ? orders.find((o) => o.id === exp.orderId) : undefined;
+          list.push({
+            id: `exp-${exp.id}`,
+            type: 'Expense',
+            date: expDate,
+            dateStr: expDate.toISOString(),
+            amount: exp.amount || 0,
+            title: exp.notes || 'Bakery Expense',
+            subtitle: linkedOrder
+              ? `For order: ${linkedOrder.customerName} (${linkedOrder.cakeType})`
+              : (exp.orderId ? `Order #${exp.orderId.slice(-6)}` : 'General Bakery Supplies'),
+            badgeText: exp.orderId ? 'Order Expense' : 'General Expense',
+            orderId: exp.orderId || 'general',
+          });
+        }
       }
     });
 

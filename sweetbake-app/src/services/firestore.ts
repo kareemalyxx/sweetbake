@@ -90,7 +90,7 @@ export const FirestoreService = {
                   ...e,
                   date: toIsoDate(e.date),
                 }))
-              : [],
+              : undefined,
           });
         });
         AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders)).catch(() => {});
@@ -135,7 +135,7 @@ export const FirestoreService = {
                 ...e,
                 date: toIsoDate(e.date),
               }))
-            : [],
+            : undefined,
         });
       });
       const lastVisible = snapshot.docs[snapshot.docs.length - 1];
@@ -188,20 +188,18 @@ export const FirestoreService = {
 
     const notificationTimestamps = [...computedTimestamps, ...customTimestamps];
 
+    // Omit expenses from the order document to prevent duplicate storage;
+    // all expenses are exclusively stored and queried in the dedicated /expenses collection.
+    const { expenses: _expenses, ...orderWithoutExpenses } = order;
+
     const dataToSave = {
-      ...order,
+      ...orderWithoutExpenses,
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
       reminderTimings: timings,
       customReminderDates: order.customReminderDates || [],
       notificationTimestamps,
-      expenses: Array.isArray(order.expenses)
-        ? order.expenses.map((e) => ({
-            ...e,
-            date: toFirebaseTimestamp(e.date),
-          }))
-        : [],
     };
     await setDoc(orderRef, dataToSave, { merge: true });
   },
