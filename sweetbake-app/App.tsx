@@ -24,9 +24,10 @@ import { triggerHaptic } from './src/services/haptics';
 import { DashboardScreen } from './src/screens/DashboardScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { BusinessNeedsScreen } from './src/screens/BusinessNeedsScreen';
+import { FinancialSheetScreen } from './src/screens/FinancialSheetScreen';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Checklist'>('Orders');
+  const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Finances' | 'Checklist'>('Orders');
   const [orders, setOrders] = useState<CakeOrder[]>([]);
   const [requirements, setRequirements] = useState<GeneralRequirement[]>([]);
 
@@ -443,6 +444,9 @@ export default function App() {
             onAdvanceStatus={handleAdvanceStatus}
           />
         )}
+        {activeTab === 'Finances' && (
+          <FinancialSheetScreen orders={orders} />
+        )}
         {activeTab === 'Checklist' && (
           <BusinessNeedsScreen
             requirements={requirements}
@@ -521,6 +525,36 @@ export default function App() {
             ]}
           >
             Schedule
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => {
+            triggerHaptic.selection();
+            setActiveTab('Finances');
+          }}
+        >
+          <Ionicons
+            name={activeTab === 'Finances' ? 'receipt' : 'receipt-outline'}
+            size={22}
+            color={
+              activeTab === 'Finances'
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.tabLabel,
+              { color: Theme.colors.textSecondary },
+              activeTab === 'Finances' && {
+                color: Theme.colors.deepRose,
+                fontWeight: '800',
+              },
+            ]}
+          >
+            Finances
           </Text>
         </TouchableOpacity>
 
