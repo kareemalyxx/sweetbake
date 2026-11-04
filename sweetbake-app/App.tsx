@@ -524,6 +524,7 @@ export default function App() {
         {activeTab === 'Checklist' && (
           <BusinessNeedsScreen
             requirements={requirements}
+            orders={orders}
             onToggleRequirement={handleToggleRequirement}
             onAddRequirement={handleAddRequirement}
             onDeleteRequirement={handleDeleteRequirement}

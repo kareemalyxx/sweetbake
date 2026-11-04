@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -14,7 +14,7 @@ import {
   UIManager,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { GeneralRequirement, RequirementCategory } from '../types';
+import { GeneralRequirement, RequirementCategory, CakeOrder } from '../types';
 import { Theme } from '../theme';
 import { EmptyState } from '../components/EmptyState';
 import { triggerHaptic } from '../services/haptics';
@@ -24,43 +24,218 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 type FilterCategory = RequirementCategory | 'All';
+type ViewGroupingMode = 'Category' | 'ByCake';
 
 interface BusinessNeedsScreenProps {
   requirements: GeneralRequirement[];
+  orders?: CakeOrder[];
   onToggleRequirement: (id: string, expenseAmount?: number) => void;
-  onAddRequirement: (title: string, category: RequirementCategory) => void;
+  onAddRequirement: (title: string, category: RequirementCategory, orderId?: string) => void;
   onDeleteRequirement: (id: string) => void;
   onClearCompleted: (category?: RequirementCategory) => void;
 }
 
+/**
+ * Returns deadline proximity tag details based on time left till delivery:
+ * 15 min, 30 min, 1 hour, 3 hour, 6 hour, 12 hour, 24 hour, 48 hour, or Overdue.
+ */
+export function getDeadlineTag(deliveryDateIso?: string): {
+  label: string;
+  isUrgent: boolean;
+  color: string;
+  bgColor: string;
+} | null {
+  if (!deliveryDateIso) return null;
+  const now = Date.now();
+  const deliveryMs = new Date(deliveryDateIso).getTime();
+  if (isNaN(deliveryMs)) return null;
+
+  const diffMs = deliveryMs - now;
+  const diffMinutes = Math.floor(diffMs / (60 * 1000));
+
+  if (diffMinutes < 0) {
+    return {
+      label: 'Overdue',
+      isUrgent: true,
+      color: '#DC2626',
+      bgColor: '#FEE2E2',
+    };
+  } else if (diffMinutes <= 15) {
+    return {
+      label: '15 min',
+      isUrgent: true,
+      color: '#B91C1C',
+      bgColor: '#FEE2E2',
+    };
+  } else if (diffMinutes <= 30) {
+    return {
+      label: '30 min',
+      isUrgent: true,
+      color: '#C2410C',
+      bgColor: '#FFEDD5',
+    };
+  } else if (diffMinutes <= 60) {
+    return {
+      label: '1 hour',
+      isUrgent: true,
+      color: '#EA580C',
+      bgColor: '#FFEDD5',
+    };
+  } else if (diffMinutes <= 3 * 60) {
+    return {
+      label: '3 hour',
+      isUrgent: true,
+      color: '#D97706',
+      bgColor: '#FEF3C7',
+    };
+  } else if (diffMinutes <= 6 * 60) {
+    return {
+      label: '6 hour',
+      isUrgent: false,
+      color: '#CA8A04',
+      bgColor: '#FEF9C3',
+    };
+  } else if (diffMinutes <= 12 * 60) {
+    return {
+      label: '12 hour',
+      isUrgent: false,
+      color: '#2563EB',
+      bgColor: '#DBEAFE',
+    };
+  } else if (diffMinutes <= 24 * 60) {
+    return {
+      label: '24 hour',
+      isUrgent: false,
+      color: '#4F46E5',
+      bgColor: '#EEF2FF',
+    };
+  } else if (diffMinutes <= 48 * 60) {
+    return {
+      label: '48 hour',
+      isUrgent: false,
+      color: '#7C3AED',
+      bgColor: '#F3E8FF',
+    };
+  }
+
+  return null;
+}
+
 export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
   requirements,
+  orders = [],
   onToggleRequirement,
   onAddRequirement,
   onDeleteRequirement,
   onClearCompleted,
 }) => {
+  const [viewMode, setViewMode] = useState<ViewGroupingMode>('Category');
   const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
+  const [selectedCakeOrderId, setSelectedCakeOrderId] = useState<string>('All');
   const [newTitle, setNewTitle] = useState('');
+
+  // Map orderId -> CakeOrder for fast lookup
+  const orderMap = useMemo(() => {
+    const map = new Map<string, CakeOrder>();
+    orders.forEach((o) => map.set(o.id, o));
+    return map;
+  }, [orders]);
+
+  // Distinct cakes list that have requirements, sorted by earliest delivery date
+  const cakeOptions = useMemo(() => {
+    // Collect orderIds from requirements
+    const orderIds = new Set<string>();
+    requirements.forEach((r) => {
+      if (r.orderId) orderIds.add(r.orderId);
+    });
+
+    const list: Array<{
+      orderId: string;
+      order?: CakeOrder;
+      customerName: string;
+      cakeType: string;
+      deliveryDate?: string;
+      reqCount: number;
+      pendingCount: number;
+    }> = [];
+
+    // General requirements not linked to any order
+    const generalReqs = requirements.filter((r) => !r.orderId);
+    if (generalReqs.length > 0) {
+      list.push({
+        orderId: 'general',
+        customerName: 'General Bakery',
+        cakeType: 'Pantry / Supplies',
+        reqCount: generalReqs.length,
+        pendingCount: generalReqs.filter((r) => !r.isCompleted).length,
+      });
+    }
+
+    orderIds.forEach((id) => {
+      const order = orderMap.get(id);
+      const reqsForOrder = requirements.filter((r) => r.orderId === id);
+      list.push({
+        orderId: id,
+        order,
+        customerName: order?.customerName || 'Cake Order',
+        cakeType: order?.cakeType || 'Custom Cake',
+        deliveryDate: order?.deliveryDate,
+        reqCount: reqsForOrder.length,
+        pendingCount: reqsForOrder.filter((r) => !r.isCompleted).length,
+      });
+    });
+
+    // Sort cakes with earliest upcoming delivery deadlines first
+    return list.sort((a, b) => {
+      if (a.orderId === 'general') return 1;
+      if (b.orderId === 'general') return -1;
+      const timeA = a.deliveryDate ? new Date(a.deliveryDate).getTime() : Infinity;
+      const timeB = b.deliveryDate ? new Date(b.deliveryDate).getTime() : Infinity;
+      return timeA - timeB;
+    });
+  }, [requirements, orderMap]);
 
   // Expense modal state when marking an item as completed
   const [pendingCompleteItem, setPendingCompleteItem] = useState<GeneralRequirement | null>(null);
   const [expenseInput, setExpenseInput] = useState('');
 
-  // Strict per-item segregation or all items:
-  const categoryItems = selectedCategory === 'All'
-    ? requirements
-    : requirements.filter((r) => r.category === selectedCategory);
-  const uncompleted = categoryItems.filter((r) => !r.isCompleted);
-  const completed = categoryItems.filter((r) => r.isCompleted);
+  // Filter items based on active viewMode
+  const filteredItems = useMemo(() => {
+    if (viewMode === 'ByCake') {
+      if (selectedCakeOrderId === 'All') {
+        return requirements;
+      }
+      if (selectedCakeOrderId === 'general') {
+        return requirements.filter((r) => !r.orderId);
+      }
+      return requirements.filter((r) => r.orderId === selectedCakeOrderId);
+    } else {
+      // Category Mode
+      if (selectedCategory === 'All') {
+        return requirements;
+      }
+      return requirements.filter((r) => r.category === selectedCategory);
+    }
+  }, [viewMode, selectedCategory, selectedCakeOrderId, requirements]);
+
+  const uncompleted = filteredItems.filter((r) => !r.isCompleted);
+  const completed = filteredItems.filter((r) => r.isCompleted);
   const sortedItems = [...uncompleted, ...completed];
 
   const handleAdd = () => {
     if (!newTitle.trim()) return;
     triggerHaptic.light();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    const targetCat: RequirementCategory = selectedCategory === 'All' ? 'Add-ons' : selectedCategory;
-    onAddRequirement(newTitle.trim(), targetCat);
+    const targetCat: RequirementCategory =
+      viewMode === 'Category' && selectedCategory !== 'All'
+        ? selectedCategory
+        : 'Add-ons';
+    const targetOrderId =
+      viewMode === 'ByCake' && selectedCakeOrderId !== 'All' && selectedCakeOrderId !== 'general'
+        ? selectedCakeOrderId
+        : undefined;
+
+    onAddRequirement(newTitle.trim(), targetCat, targetOrderId);
     setNewTitle('');
   };
 
@@ -109,59 +284,210 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
 
   return (
     <View style={styles.container}>
-      {/* Scrollable Category Tabs with "All" first */}
-      <View style={styles.categoryRowWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryRow}
+      {/* Mode Switcher: By Category vs. By Cake */}
+      <View style={styles.viewModeToggleRow}>
+        <TouchableOpacity
+          style={[styles.viewModeBtn, viewMode === 'Category' && styles.viewModeBtnActive]}
+          onPress={() => {
+            triggerHaptic.selection();
+            setViewMode('Category');
+          }}
         >
-          {categories.map((cat) => {
-            const isSelected = selectedCategory === cat;
-            const pendingCount = cat === 'All'
-              ? requirements.filter((r) => !r.isCompleted).length
-              : requirements.filter((r) => r.category === cat && !r.isCompleted).length;
+          <Ionicons
+            name="grid-outline"
+            size={14}
+            color={viewMode === 'Category' ? '#FFFFFF' : Theme.colors.textDark}
+            style={{ marginRight: 5 }}
+          />
+          <Text style={[styles.viewModeText, viewMode === 'Category' && styles.viewModeTextActive]}>
+            By Category
+          </Text>
+        </TouchableOpacity>
 
-            return (
-              <TouchableOpacity
-                key={cat}
-                style={[styles.catTab, isSelected && styles.catTabActive]}
-                onPress={() => {
-                  triggerHaptic.selection();
-                  setSelectedCategory(cat);
-                }}
-              >
-                <Ionicons
-                  name={getCategoryIcon(cat)}
-                  size={14}
-                  color={isSelected ? '#FFFFFF' : Theme.colors.textDark}
-                  style={{ marginRight: 4 }}
-                />
-                <Text style={[styles.catTabText, isSelected && styles.catTabTextActive]}>
-                  {cat}
-                </Text>
-                {pendingCount > 0 && (
-                  <View
-                    style={[
-                      styles.pendingBadge,
-                      isSelected ? styles.pendingBadgeActive : styles.pendingBadgeInactive,
-                    ]}
-                  >
-                    <Text
+        <TouchableOpacity
+          style={[styles.viewModeBtn, viewMode === 'ByCake' && styles.viewModeBtnActive]}
+          onPress={() => {
+            triggerHaptic.selection();
+            setViewMode('ByCake');
+          }}
+        >
+          <Ionicons
+            name="gift-outline"
+            size={14}
+            color={viewMode === 'ByCake' ? '#FFFFFF' : Theme.colors.textDark}
+            style={{ marginRight: 5 }}
+          />
+          <Text style={[styles.viewModeText, viewMode === 'ByCake' && styles.viewModeTextActive]}>
+            By Cake Commission
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Dynamic Filter Row: Category Tabs or Cake Horizontal Scroller */}
+      {viewMode === 'Category' ? (
+        <View style={styles.categoryRowWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryRow}
+          >
+            {categories.map((cat) => {
+              const isSelected = selectedCategory === cat;
+              const pendingCount = cat === 'All'
+                ? requirements.filter((r) => !r.isCompleted).length
+                : requirements.filter((r) => r.category === cat && !r.isCompleted).length;
+
+              return (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.catTab, isSelected && styles.catTabActive]}
+                  onPress={() => {
+                    triggerHaptic.selection();
+                    setSelectedCategory(cat);
+                  }}
+                >
+                  <Ionicons
+                    name={getCategoryIcon(cat)}
+                    size={14}
+                    color={isSelected ? '#FFFFFF' : Theme.colors.textDark}
+                    style={{ marginRight: 4 }}
+                  />
+                  <Text style={[styles.catTabText, isSelected && styles.catTabTextActive]}>
+                    {cat}
+                  </Text>
+                  {pendingCount > 0 && (
+                    <View
                       style={[
-                        styles.pendingBadgeText,
-                        isSelected && { color: Theme.colors.deepRose },
+                        styles.pendingBadge,
+                        isSelected ? styles.pendingBadgeActive : styles.pendingBadgeInactive,
                       ]}
                     >
-                      {pendingCount}
+                      <Text
+                        style={[
+                          styles.pendingBadgeText,
+                          isSelected && { color: Theme.colors.deepRose },
+                        ]}
+                      >
+                        {pendingCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      ) : (
+        <View style={styles.categoryRowWrapper}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryRow}
+          >
+            {/* "All Cakes" Option */}
+            <TouchableOpacity
+              style={[styles.cakeTab, selectedCakeOrderId === 'All' && styles.cakeTabActive]}
+              onPress={() => {
+                triggerHaptic.selection();
+                setSelectedCakeOrderId('All');
+              }}
+            >
+              <Ionicons
+                name="albums-outline"
+                size={13}
+                color={selectedCakeOrderId === 'All' ? '#FFFFFF' : Theme.colors.deepRose}
+                style={{ marginRight: 4 }}
+              />
+              <Text
+                style={[
+                  styles.cakeTabText,
+                  selectedCakeOrderId === 'All' && styles.cakeTabTextActive,
+                ]}
+              >
+                All Cakes ({requirements.filter((r) => !r.isCompleted).length})
+              </Text>
+            </TouchableOpacity>
+
+            {cakeOptions.map((item) => {
+              const isSelected = selectedCakeOrderId === item.orderId;
+              const deadline = getDeadlineTag(item.deliveryDate);
+
+              return (
+                <TouchableOpacity
+                  key={item.orderId}
+                  style={[styles.cakeTab, isSelected && styles.cakeTabActive]}
+                  onPress={() => {
+                    triggerHaptic.selection();
+                    setSelectedCakeOrderId(item.orderId);
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons
+                      name={item.orderId === 'general' ? 'cube-outline' : 'gift'}
+                      size={13}
+                      color={isSelected ? '#FFFFFF' : Theme.colors.deepRose}
+                      style={{ marginRight: 4 }}
+                    />
+                    <Text
+                      style={[
+                        styles.cakeTabText,
+                        isSelected && styles.cakeTabTextActive,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.customerName}
                     </Text>
                   </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
+
+                  {/* Deadline Tag directly in Cake Filter Tab */}
+                  {deadline && (
+                    <View
+                      style={[
+                        styles.inlineDeadlineTag,
+                        { backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : deadline.bgColor },
+                      ]}
+                    >
+                      <Ionicons
+                        name="alarm"
+                        size={10}
+                        color={isSelected ? '#FFFFFF' : deadline.color}
+                        style={{ marginRight: 2 }}
+                      />
+                      <Text
+                        style={[
+                          styles.inlineDeadlineTagText,
+                          { color: isSelected ? '#FFFFFF' : deadline.color },
+                        ]}
+                      >
+                        {deadline.label}
+                      </Text>
+                    </View>
+                  )}
+
+                  {item.pendingCount > 0 && (
+                    <View
+                      style={[
+                        styles.pendingBadge,
+                        isSelected ? styles.pendingBadgeActive : styles.pendingBadgeInactive,
+                        { marginLeft: 4 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.pendingBadgeText,
+                          isSelected && { color: Theme.colors.deepRose },
+                        ]}
+                      >
+                        {item.pendingCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
       {/* Quick Add Bar for To-Do item */}
       <View style={styles.inputContainer}>
@@ -221,65 +547,114 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
             }
           />
         }
-        renderItem={({ item }) => (
-          <View style={[styles.row, item.isCompleted && styles.rowCompleted]}>
-            <TouchableOpacity
-              style={styles.checkboxTouch}
-              onPress={() => handleItemPress(item)}
-            >
-              <View
-                style={[
-                  styles.checkbox,
-                  item.isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked,
-                ]}
-              >
-                {item.isCompleted && (
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                )}
-              </View>
-            </TouchableOpacity>
+        renderItem={({ item }) => {
+          // Look up corresponding order if item is linked
+          const linkedOrder = item.orderId ? orderMap.get(item.orderId) : undefined;
+          const deadline = linkedOrder ? getDeadlineTag(linkedOrder.deliveryDate) : null;
 
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.itemTitle,
-                  item.isCompleted && styles.itemTitleCompleted,
-                ]}
+          return (
+            <View style={[styles.row, item.isCompleted && styles.rowCompleted]}>
+              <TouchableOpacity
+                style={styles.checkboxTouch}
                 onPress={() => handleItemPress(item)}
               >
-                {item.title}
-              </Text>
-              <View style={styles.tagRow}>
-                <View style={styles.addonTag}>
-                  <Ionicons
-                    name={getCategoryIcon(item.category)}
-                    size={10}
-                    color={Theme.colors.deepRose}
-                    style={{ marginRight: 3 }}
-                  />
-                  <Text style={styles.addonTagText}>{item.category}</Text>
+                <View
+                  style={[
+                    styles.checkbox,
+                    item.isCompleted ? styles.checkboxChecked : styles.checkboxUnchecked,
+                  ]}
+                >
+                  {item.isCompleted && (
+                    <Ionicons name="checkmark" size={14} color="#FFFFFF" />
+                  )}
                 </View>
+              </TouchableOpacity>
 
-                {item.isCompleted && typeof item.expenseAmount === 'number' && item.expenseAmount > 0 && (
-                  <View style={styles.expenseBadge}>
-                    <Ionicons name="cash-outline" size={10} color="#D97706" style={{ marginRight: 2 }} />
-                    <Text style={styles.expenseBadgeText}>${item.expenseAmount.toFixed(2)}</Text>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[
+                    styles.itemTitle,
+                    item.isCompleted && styles.itemTitleCompleted,
+                  ]}
+                  onPress={() => handleItemPress(item)}
+                >
+                  {item.title}
+                </Text>
+
+                <View style={styles.tagRow}>
+                  {/* Category Pill */}
+                  <View style={styles.addonTag}>
+                    <Ionicons
+                      name={getCategoryIcon(item.category)}
+                      size={10}
+                      color={Theme.colors.deepRose}
+                      style={{ marginRight: 3 }}
+                    />
+                    <Text style={styles.addonTagText}>{item.category}</Text>
                   </View>
-                )}
-              </View>
-            </View>
 
-            <TouchableOpacity
-              onPress={() => {
-                triggerHaptic.light();
-                onDeleteRequirement(item.id);
-              }}
-              style={styles.deleteBtn}
-            >
-              <Ionicons name="trash-outline" size={16} color={Theme.colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-        )}
+                  {/* Linked Cake Order Pill */}
+                  {linkedOrder && (
+                    <View style={styles.cakeTag}>
+                      <Ionicons
+                        name="gift-outline"
+                        size={10}
+                        color={Theme.colors.softLilac}
+                        style={{ marginRight: 3 }}
+                      />
+                      <Text style={styles.cakeTagText} numberOfLines={1}>
+                        {linkedOrder.customerName}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Deadline Urgency Tag (e.g. 15 min, 30 min, 1 hour, 3 hour, 6 hour, 12 hour, 24 hour, 48 hour) */}
+                  {deadline && (
+                    <View
+                      style={[
+                        styles.deadlineBadge,
+                        { backgroundColor: deadline.bgColor },
+                      ]}
+                    >
+                      <Ionicons
+                        name="alarm"
+                        size={10}
+                        color={deadline.color}
+                        style={{ marginRight: 2 }}
+                      />
+                      <Text
+                        style={[
+                          styles.deadlineBadgeText,
+                          { color: deadline.color },
+                        ]}
+                      >
+                        {deadline.label}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Completed Expense Badge */}
+                  {item.isCompleted && typeof item.expenseAmount === 'number' && item.expenseAmount > 0 && (
+                    <View style={styles.expenseBadge}>
+                      <Ionicons name="cash-outline" size={10} color="#D97706" style={{ marginRight: 2 }} />
+                      <Text style={styles.expenseBadgeText}>${item.expenseAmount.toFixed(2)}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => {
+                  triggerHaptic.light();
+                  onDeleteRequirement(item.id);
+                }}
+                style={styles.deleteBtn}
+              >
+                <Ionicons name="trash-outline" size={16} color={Theme.colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+          );
+        }}
       />
 
       {/* Record Expense Modal on Requirement Completion */}
@@ -346,6 +721,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.cream,
   },
+  viewModeToggleRow: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 2,
+    gap: 8,
+  },
+  viewModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.white,
+    paddingVertical: 8,
+    borderRadius: Theme.borderRadius.button,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  viewModeBtnActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderColor: Theme.colors.deepRose,
+  },
+  viewModeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  viewModeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
   categoryRowWrapper: {
     paddingVertical: 10,
   },
@@ -376,6 +782,68 @@ const styles = StyleSheet.create({
   },
   catTabTextActive: {
     color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  cakeTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.white,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: Theme.borderRadius.button,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  cakeTabActive: {
+    backgroundColor: Theme.colors.deepRose,
+    borderColor: Theme.colors.deepRose,
+  },
+  cakeTabText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    maxWidth: 120,
+  },
+  cakeTabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  inlineDeadlineTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginLeft: 6,
+  },
+  inlineDeadlineTagText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  cakeTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.lavenderLight,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  cakeTagText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Theme.colors.softLilac,
+    maxWidth: 110,
+  },
+  deadlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  deadlineBadgeText: {
+    fontSize: 10,
     fontWeight: '800',
   },
   pendingBadge: {
