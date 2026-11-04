@@ -1,21 +1,25 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Linking, Alert, Platform } from 'react-native';
-import * as Notifications from 'expo-notifications';
 import { CakeOrder, ReminderTiming } from '../types';
 
-// Configure system notification handler for phone alerts
+// Safely resolve Expo Notifications with lazy loading to prevent Metro module resolution / stale cache crashes
+let Notifications: typeof import('expo-notifications') | null = null;
 try {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-      shouldShowBanner: true,
-      shouldShowList: true,
-    }),
-  });
+  Notifications = require('expo-notifications');
+  if (Notifications && typeof Notifications.setNotificationHandler === 'function') {
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+  }
 } catch (e) {
-  // Handled safely in web/unsupported environments
+  // Gracefully fallback on web or before native module bundle reload
+  Notifications = null;
 }
 
 export interface InAppNotification {
@@ -145,7 +149,7 @@ export const NotificationService = {
    */
   async requestDeviceNotificationPermission(): Promise<boolean> {
     try {
-      if (Platform.OS === 'web') return false;
+      if (Platform.OS === 'web' || !Notifications) return false;
       const { status: existingStatus } = await Notifications.getPermissionsAsync();
       let finalStatus = existingStatus;
       if (existingStatus !== 'granted') {
@@ -164,6 +168,7 @@ export const NotificationService = {
    */
   async sendImmediatePhoneAlert(title: string, body: string): Promise<string | null> {
     try {
+      if (!Notifications) return null;
       await this.requestDeviceNotificationPermission();
       const notifId = await Notifications.scheduleNotificationAsync({
         content: {
@@ -186,6 +191,7 @@ export const NotificationService = {
    */
   async schedulePhoneAlert(triggerDate: Date, title: string, body: string, data?: any): Promise<string | null> {
     try {
+      if (!Notifications) return null;
       const now = Date.now();
       const triggerMs = triggerDate.getTime();
       const secondsUntil = Math.floor((triggerMs - now) / 1000);
@@ -333,7 +339,7 @@ export const NotificationService = {
     const current = await this.getAllReminders();
     // Cancel scheduled native OS phone notifications
     for (const notif of current) {
-      if (notif.orderId === orderId && notif.systemNotificationId) {
+      if (notif.orderId === orderId && notif.systemNotificationId && Notifications) {
         try {
           await Notifications.cancelScheduledNotificationAsync(notif.systemNotificationId);
         } catch {
