@@ -370,7 +370,7 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.deepRose,
   },
   catTabText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: Theme.colors.textDark,
   },
@@ -380,9 +380,9 @@ const styles = StyleSheet.create({
   },
   pendingBadge: {
     marginLeft: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
   },
   pendingBadgeActive: {
     backgroundColor: '#FFFFFF',
@@ -391,7 +391,7 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.blushPink,
   },
   pendingBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '800',
     color: Theme.colors.deepRose,
   },
@@ -466,9 +466,9 @@ const styles = StyleSheet.create({
     paddingRight: 10,
   },
   checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -480,7 +480,7 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.status.deliveredDark,
   },
   itemTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
     color: Theme.colors.textDark,
   },
@@ -491,15 +491,15 @@ const styles = StyleSheet.create({
   tagRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    marginTop: 3,
+    gap: 8,
+    marginTop: 4,
   },
   addonTag: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   addonTagText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '600',
     color: Theme.colors.deepRose,
   },
@@ -507,17 +507,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF3C7',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 8,
   },
   expenseBadgeText: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
     color: '#B45309',
   },
   deleteBtn: {
-    padding: 4,
+    padding: 6,
   },
   modalOverlay: {
     flex: 1,

@@ -1386,14 +1386,14 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   reminderTitle: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: Theme.colors.textDark,
   },
   reminderSubtitle: {
-    fontSize: 11,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
-    marginTop: 1,
+    marginTop: 2,
   },
   timingSelectBox: {
     marginTop: 12,
@@ -1402,7 +1402,7 @@ const styles = StyleSheet.create({
     borderTopColor: Theme.colors.border,
   },
   timingLabel: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: Theme.colors.textDark,
     textTransform: 'uppercase',
@@ -1415,8 +1415,8 @@ const styles = StyleSheet.create({
   timingChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
     borderRadius: 16,
     backgroundColor: Theme.colors.cream,
     borderWidth: 1,
@@ -1428,7 +1428,7 @@ const styles = StyleSheet.create({
     borderColor: Theme.colors.deepRose,
   },
   timingChipText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '600',
     color: Theme.colors.textDark,
   },
@@ -1443,7 +1443,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   fieldLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600',
     color: Theme.colors.textDark,
   },
@@ -1453,7 +1453,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   inlineAddText: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: Theme.colors.deepRose,
   },
@@ -1604,20 +1604,20 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   remainingLabel: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
     color: Theme.colors.textDark,
   },
   remainingFormula: {
-    fontSize: 11,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
     marginTop: 2,
   },
   remainingPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 12,
   },
   remainingPillPaid: {
@@ -1627,7 +1627,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFF0F2',
   },
   remainingText: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
   },
   remainingTextPaid: {
@@ -1742,12 +1742,12 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   expenseItemNotes: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: Theme.colors.textDark,
   },
   expenseItemDate: {
-    fontSize: 10,
+    fontSize: 12,
     color: Theme.colors.textSecondary,
     marginTop: 2,
   },
@@ -1757,12 +1757,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   expenseItemAmount: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '700',
     color: '#C62828',
   },
   expenseRemoveBtn: {
-    padding: 4,
+    padding: 6,
   },
   emptyExpensesText: {
     fontSize: 12,
