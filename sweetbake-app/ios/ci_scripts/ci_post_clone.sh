@@ -26,3 +26,4 @@ echo "Installing CocoaPods..."
 pod install
 
 echo "=== Xcode Cloud: ci_post_clone.sh finished successfully ==="
+
