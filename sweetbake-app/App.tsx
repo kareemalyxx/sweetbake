@@ -199,31 +199,43 @@ export default function App() {
           });
         }
 
-        // If delivery fees were entered, automatically record as an expense in /expenses
-        if (
+        // Manage Delivery Expense in /expenses:
+        // - When delivery cost > 0: create or update the single deterministic expense
+        // - When delivery cost is 0, empty, or fulfillment changed from Delivery: remove the delivery expense
+        const deliveryExpenseId = `exp-deliv-${targetOrderId}`;
+        const hasDeliveryCost =
           orderToSave.fulfillmentType === 'Delivery' &&
           typeof orderToSave.deliveryCost === 'number' &&
-          orderToSave.deliveryCost > 0
-        ) {
-          const deliveryExpenseId = `exp-deliv-${targetOrderId}`;
+          orderToSave.deliveryCost > 0;
+
+        if (hasDeliveryCost) {
           const deliveryExpense: OrderExpense = {
             id: deliveryExpenseId,
             orderId: targetOrderId,
-            amount: orderToSave.deliveryCost,
+            amount: orderToSave.deliveryCost!,
             notes: orderToSave.deliveryPerson
               ? `Delivery fee (${orderToSave.deliveryPerson})`
               : `Delivery fee for ${orderToSave.customerName}`,
             date: orderToSave.deliveryDate || new Date().toISOString(),
           };
 
+          // Save / update in Firestore
           FirestoreService.saveExpense(deliveryExpense).catch((e) =>
             console.warn('Failed to record delivery fee to /expenses:', e)
           );
 
+          // Update in-memory state: replace if existed or prepend
           setExpenses((prev) => [
             deliveryExpense,
             ...prev.filter((e) => e.id !== deliveryExpenseId),
           ]);
+        } else {
+          // If delivery cost is 0, empty, or not delivery, delete any prior delivery expense
+          const existed = expenses.some((e) => e.id === deliveryExpenseId);
+          if (existed) {
+            setExpenses((prev) => prev.filter((e) => e.id !== deliveryExpenseId));
+            FirestoreService.deleteExpense(deliveryExpenseId).catch(() => {});
+          }
         }
       }
     }
