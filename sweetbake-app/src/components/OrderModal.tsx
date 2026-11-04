@@ -89,6 +89,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
 
+  // Delivery specific fields
+  const [deliveryCostStr, setDeliveryCostStr] = useState('');
+  const [deliveryPerson, setDeliveryPerson] = useState('');
+  const [deliveryPhone, setDeliveryPhone] = useState('');
+  const [deliveryHandoverDate, setDeliveryHandoverDate] = useState<Date | null>(null);
+  const [showHandoverDatePicker, setShowHandoverDatePicker] = useState(false);
+  const [showHandoverTimePicker, setShowHandoverTimePicker] = useState(false);
+
   // Dynamic customization lists
   const [availableFlavors, setAvailableFlavors] = useState<string[]>(CAKE_FLAVORS);
   const [availableCakeTypes, setAvailableCakeTypes] = useState<string[]>(CAKE_TYPES);
@@ -153,6 +161,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setExpenses(orderToEdit.expenses || []);
       setFulfillmentType(orderToEdit.fulfillmentType || 'Pickup');
       setLocation(orderToEdit.location || '');
+      setDeliveryCostStr(orderToEdit.deliveryCost !== undefined ? String(orderToEdit.deliveryCost) : '');
+      setDeliveryPerson(orderToEdit.deliveryPerson || '');
+      setDeliveryPhone(orderToEdit.deliveryPhone || '');
+      setDeliveryHandoverDate(orderToEdit.deliveryHandoverTime ? new Date(orderToEdit.deliveryHandoverTime) : null);
       setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
       if (Array.isArray(orderToEdit.reminderTimings) && orderToEdit.reminderTimings.length > 0) {
         setReminderTimings(orderToEdit.reminderTimings);
@@ -183,6 +195,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShowAddExpense(false);
       setFulfillmentType('Pickup');
       setLocation('');
+      setDeliveryCostStr('');
+      setDeliveryPerson('');
+      setDeliveryPhone('');
+      setDeliveryHandoverDate(null);
       setReminderEnabled(false);
       setReminderTimings(['1_hour']);
       setCustomReminderDates([]);
@@ -197,6 +213,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setShowTimePicker(false);
     setShowCustomDatePicker(false);
     setShowCustomTimePicker(false);
+    setShowHandoverDatePicker(false);
+    setShowHandoverTimePicker(false);
   }, [orderToEdit, initialDate, visible]);
 
   // Calculated remaining payment & profit after expenses
@@ -205,6 +223,37 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const remainingVal = Math.max(0, totalVal - downVal);
   const totalExpensesVal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const estimatedProfitVal = totalVal - totalExpensesVal;
+
+  // Handle Handover Date change
+  const onHandoverDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowHandoverDatePicker(false);
+    }
+    if (selected) {
+      triggerHaptic.selection();
+      const current = deliveryHandoverDate || new Date(deliveryDate.getTime() - 2 * 3600000);
+      const updated = new Date(current);
+      updated.setFullYear(selected.getFullYear());
+      updated.setMonth(selected.getMonth());
+      updated.setDate(selected.getDate());
+      setDeliveryHandoverDate(updated);
+    }
+  };
+
+  // Handle Handover Time change
+  const onHandoverTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowHandoverTimePicker(false);
+    }
+    if (selected) {
+      triggerHaptic.selection();
+      const current = deliveryHandoverDate || new Date(deliveryDate.getTime() - 2 * 3600000);
+      const updated = new Date(current);
+      updated.setHours(selected.getHours());
+      updated.setMinutes(selected.getMinutes());
+      setDeliveryHandoverDate(updated);
+    }
+  };
 
   // Handle native Date change
   const onDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
@@ -483,6 +532,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       expenses,
       fulfillmentType,
       location: location.trim(),
+      deliveryCost: fulfillmentType === 'Delivery' && deliveryCostStr ? Math.max(0, parseFloat(deliveryCostStr) || 0) : undefined,
+      deliveryPerson: fulfillmentType === 'Delivery' ? deliveryPerson.trim() || undefined : undefined,
+      deliveryPhone: fulfillmentType === 'Delivery' ? deliveryPhone.trim() || undefined : undefined,
+      deliveryHandoverTime: fulfillmentType === 'Delivery' && deliveryHandoverDate ? deliveryHandoverDate.toISOString() : undefined,
       reminderEnabled,
       reminderTiming: reminderEnabled ? reminderTimings[0] : undefined,
       reminderTimings: reminderEnabled ? reminderTimings : [],
@@ -632,6 +685,169 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   onChangeText={setLocation}
                 />
               </View>
+
+              {/* Delivery Logistics Details: Shown when Delivery is selected */}
+              {fulfillmentType === 'Delivery' && (
+                <View style={styles.deliveryDetailsCard}>
+                  <View style={styles.deliveryDetailsHeader}>
+                    <Ionicons name="bicycle-outline" size={18} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
+                    <Text style={styles.deliveryDetailsTitle}>Courier / Delivery Dispatch Details</Text>
+                  </View>
+
+                  {/* 1. Delivery Cost */}
+                  <Text style={styles.deliverySubLabel}>Delivery Fee / Cost</Text>
+                  <View style={styles.deliveryInputRow}>
+                    <Text style={styles.currencyPrefix}>$</Text>
+                    <TextInput
+                      style={styles.deliveryInput}
+                      placeholder="0.00 (e.g. 15.00)"
+                      placeholderTextColor={Theme.colors.textSecondary}
+                      keyboardType="decimal-pad"
+                      value={deliveryCostStr}
+                      onChangeText={setDeliveryCostStr}
+                    />
+                  </View>
+
+                  {/* 2. Delivery Person / Company */}
+                  <Text style={styles.deliverySubLabel}>Delivery Person or Courier Company</Text>
+                  <View style={styles.deliveryInputRow}>
+                    <Ionicons name="person-outline" size={16} color={Theme.colors.deepRose} style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.deliveryInput}
+                      placeholder="e.g. John Doe, Uber Eats, DoorDash, Swift Courier"
+                      placeholderTextColor={Theme.colors.textSecondary}
+                      value={deliveryPerson}
+                      onChangeText={setDeliveryPerson}
+                    />
+                  </View>
+
+                  {/* 3. Driver / Company Contact Phone */}
+                  <Text style={styles.deliverySubLabel}>Driver / Courier Phone Number</Text>
+                  <View style={styles.deliveryInputRow}>
+                    <Ionicons name="call-outline" size={16} color="#25D366" style={{ marginRight: 8 }} />
+                    <TextInput
+                      style={styles.deliveryInput}
+                      placeholder="e.g. +1 555 987 6543"
+                      placeholderTextColor={Theme.colors.textSecondary}
+                      keyboardType="phone-pad"
+                      value={deliveryPhone}
+                      onChangeText={setDeliveryPhone}
+                    />
+                  </View>
+
+                  {/* 4. When to hand over the cake to driver (Handover Schedule) */}
+                  <Text style={styles.deliverySubLabel}>When to Give Him/Her the Cake (Handover Time)</Text>
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                    {/* Handover Date */}
+                    <TouchableOpacity
+                      style={[styles.handoverPickerBtn, showHandoverDatePicker && styles.handoverPickerBtnActive]}
+                      onPress={() => {
+                        triggerHaptic.selection();
+                        if (!deliveryHandoverDate) {
+                          const defaultHandover = new Date(deliveryDate.getTime() - 2 * 3600000);
+                          setDeliveryHandoverDate(defaultHandover);
+                        }
+                        setShowHandoverDatePicker(!showHandoverDatePicker);
+                        if (!showHandoverDatePicker) setShowHandoverTimePicker(false);
+                      }}
+                    >
+                      <Ionicons name="calendar-outline" size={16} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
+                      <Text style={styles.handoverPickerBtnText}>
+                        {deliveryHandoverDate
+                          ? deliveryHandoverDate.toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })
+                          : 'Set Date'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {/* Handover Time */}
+                    <TouchableOpacity
+                      style={[styles.handoverPickerBtn, showHandoverTimePicker && styles.handoverPickerBtnActive]}
+                      onPress={() => {
+                        triggerHaptic.selection();
+                        if (!deliveryHandoverDate) {
+                          const defaultHandover = new Date(deliveryDate.getTime() - 2 * 3600000);
+                          setDeliveryHandoverDate(defaultHandover);
+                        }
+                        setShowHandoverTimePicker(!showHandoverTimePicker);
+                        if (!showHandoverTimePicker) setShowHandoverDatePicker(false);
+                      }}
+                    >
+                      <Ionicons name="time-outline" size={16} color={Theme.colors.softLilac} style={{ marginRight: 6 }} />
+                      <Text style={styles.handoverPickerBtnText}>
+                        {deliveryHandoverDate
+                          ? deliveryHandoverDate.toLocaleTimeString(undefined, {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            })
+                          : 'Set Time'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    {deliveryHandoverDate && (
+                      <TouchableOpacity
+                        style={styles.handoverClearBtn}
+                        onPress={() => {
+                          triggerHaptic.light();
+                          setDeliveryHandoverDate(null);
+                          setShowHandoverDatePicker(false);
+                          setShowHandoverTimePicker(false);
+                        }}
+                      >
+                        <Ionicons name="close-circle" size={18} color={Theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Inline Pickers for Handover */}
+                  {showHandoverDatePicker && (
+                    <View style={[styles.inlinePickerContainer, { marginTop: 8 }]}>
+                      <DateTimePicker
+                        value={deliveryHandoverDate || deliveryDate}
+                        mode="date"
+                        display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                        onChange={onHandoverDateChange}
+                        accentColor={Theme.colors.deepRose}
+                        textColor={Theme.colors.textDark}
+                        themeVariant="light"
+                      />
+                      {Platform.OS === 'ios' && (
+                        <TouchableOpacity
+                          style={styles.donePickerBtn}
+                          onPress={() => setShowHandoverDatePicker(false)}
+                        >
+                          <Text style={styles.donePickerText}>Done</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+
+                  {showHandoverTimePicker && (
+                    <View style={[styles.inlinePickerContainer, { marginTop: 8 }]}>
+                      <DateTimePicker
+                        value={deliveryHandoverDate || deliveryDate}
+                        mode="time"
+                        display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                        onChange={onHandoverTimeChange}
+                        accentColor={Theme.colors.deepRose}
+                        textColor={Theme.colors.textDark}
+                        themeVariant="light"
+                      />
+                      {Platform.OS === 'ios' && (
+                        <TouchableOpacity
+                          style={styles.donePickerBtn}
+                          onPress={() => setShowHandoverTimePicker(false)}
+                        >
+                          <Text style={styles.donePickerText}>Done</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
 
             {/* Section 3: Delivery Date & Time (Pop-up native Calendar & Clock Knob) */}
@@ -1627,6 +1843,80 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     fontSize: 13,
     color: Theme.colors.textDark,
+  },
+  deliveryDetailsCard: {
+    marginTop: 12,
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
+  },
+  deliveryDetailsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  deliveryDetailsTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: Theme.colors.deepRose,
+  },
+  deliverySubLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    marginTop: 8,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  deliveryInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  currencyPrefix: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+    marginRight: 6,
+  },
+  deliveryInput: {
+    flex: 1,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: Theme.colors.textDark,
+  },
+  handoverPickerBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.white,
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  handoverPickerBtnActive: {
+    borderColor: Theme.colors.deepRose,
+    backgroundColor: '#FFF0F3',
+  },
+  handoverPickerBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  handoverClearBtn: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
   },
   pickerButton: {
     flexDirection: 'row',

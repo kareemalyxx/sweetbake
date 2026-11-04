@@ -128,8 +128,10 @@ service cloud.firestore {
       let allowed = [
         'id', 'customerName', 'customerPhone', 'deliveryDate', 'cakeType', 'shape', 'flavor',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
-        'remainingPayment', 'expenses', 'fulfillmentType', 'location', 'reminderEnabled',
-        'reminderTiming', 'reminderTimings', 'customReminderDates', 'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
+        'remainingPayment', 'expenses', 'fulfillmentType', 'location',
+        'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
+        'reminderEnabled', 'reminderTiming', 'reminderTimings', 'customReminderDates',
+        'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
       let validFulfillment = ['Pickup', 'Delivery'];
@@ -154,6 +156,10 @@ service cloud.firestore {
         (!('expenses' in data) || (data.expenses is list && data.expenses.size() <= 50)) &&
         (!('fulfillmentType' in data) || data.fulfillmentType in validFulfillment) &&
         (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
+        (!('deliveryCost' in data) || (data.deliveryCost is number && data.deliveryCost >= 0 && data.deliveryCost <= 100000)) &&
+        (!('deliveryPerson' in data) || (data.deliveryPerson is string && data.deliveryPerson.size() <= 150)) &&
+        (!('deliveryPhone' in data) || (data.deliveryPhone is string && data.deliveryPhone.size() <= 40)) &&
+        (!('deliveryHandoverTime' in data) || isValidTimestampOrIsoDate(data.deliveryHandoverTime)) &&
         (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&

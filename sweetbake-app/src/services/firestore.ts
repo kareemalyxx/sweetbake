@@ -82,6 +82,7 @@ export const FirestoreService = {
             deliveryDate: toIsoDate(raw.deliveryDate),
             createdAt: toIsoDate(raw.createdAt),
             updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+            deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
             notificationTimestamps: Array.isArray(raw.notificationTimestamps)
               ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
               : undefined,
@@ -127,6 +128,7 @@ export const FirestoreService = {
           deliveryDate: toIsoDate(raw.deliveryDate),
           createdAt: toIsoDate(raw.createdAt),
           updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
           notificationTimestamps: Array.isArray(raw.notificationTimestamps)
             ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
             : undefined,
@@ -200,6 +202,10 @@ export const FirestoreService = {
       reminderTimings: timings,
       customReminderDates: order.customReminderDates || [],
       notificationTimestamps,
+      ...(order.deliveryHandoverTime ? { deliveryHandoverTime: toFirebaseTimestamp(order.deliveryHandoverTime) } : {}),
+      ...(typeof order.deliveryCost === 'number' ? { deliveryCost: order.deliveryCost } : {}),
+      ...(order.deliveryPerson ? { deliveryPerson: order.deliveryPerson } : {}),
+      ...(order.deliveryPhone ? { deliveryPhone: order.deliveryPhone } : {}),
     };
     await setDoc(orderRef, dataToSave, { merge: true });
   },

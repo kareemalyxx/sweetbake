@@ -30,6 +30,10 @@ export interface CakeOrder {
   expenses?: OrderExpense[]; // Expenses incurred for this order
   fulfillmentType?: FulfillmentType; // 'Pickup' | 'Delivery'
   location?: string; // Delivery address or Pickup location notes
+  deliveryCost?: number; // Cost charged or paid for delivery
+  deliveryPerson?: string; // Delivery person name or logistics company
+  deliveryPhone?: string; // Contact phone number for delivery driver/company
+  deliveryHandoverTime?: string; // When to hand the cake over to driver (ISO string or time note)
   reminderEnabled?: boolean; // In-app reminder active
   reminderTiming?: ReminderTiming; // Legacy single reminder timing
   reminderTimings?: ReminderTiming[]; // Multiple reminder notifications (e.g., ['15_min', '1_hour', '1_day'])

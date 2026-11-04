@@ -104,6 +104,20 @@ export const OrderRow: React.FC<OrderRowProps> = ({
             </View>
           )}
 
+          {/* Delivery Dispatch Summary (Driver, Cost, Handover time) */}
+          {order.fulfillmentType === 'Delivery' && (order.deliveryPerson || order.deliveryCost !== undefined || order.deliveryHandoverTime) && (
+            <View style={styles.deliveryInfoRow}>
+              <Ionicons name="bicycle-outline" size={11} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+              <Text style={styles.deliveryInfoText} numberOfLines={1}>
+                {[
+                  order.deliveryPerson ? `Driver: ${order.deliveryPerson}` : null,
+                  order.deliveryCost !== undefined ? `Fee: $${order.deliveryCost.toFixed(2)}` : null,
+                  order.deliveryHandoverTime ? `Handover: ${new Date(order.deliveryHandoverTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })}` : null,
+                ].filter(Boolean).join(' • ')}
+              </Text>
+            </View>
+          )}
+
           {/* Badges / Status row */}
           <View style={styles.bottomRow}>
             <StatusPill status={order.status} />
@@ -314,6 +328,21 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: Theme.colors.textSecondary,
     flex: 1,
+  },
+  deliveryInfoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF5F7',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginTop: 3,
+    alignSelf: 'flex-start',
+  },
+  deliveryInfoText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
   },
   bottomRow: {
     flexDirection: 'row',
