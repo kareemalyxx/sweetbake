@@ -13,6 +13,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus } from './src/types';
 import { StorageService } from './src/services/storage';
 import { NotificationService, InAppNotification } from './src/services/notifications';
+import { AuthService } from './src/services/auth';
+import { AuthModal } from './src/components/AuthModal';
+import { User } from 'firebase/auth';
 import { LightTheme, DarkTheme, Theme, setActiveTheme } from './src/theme';
 import { triggerHaptic } from './src/services/haptics';
 
@@ -34,6 +37,13 @@ export default function App() {
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [allReminders, setAllReminders] = useState<InAppNotification[]>([]);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  useEffect(() => {
+    const unsub = AuthService.subscribeToAuthChanges((u) => setCurrentUser(u));
+    return () => unsub();
+  }, []);
 
   // App re-render trigger for child components reading Theme directly
   const [, setTick] = useState(0);
@@ -273,6 +283,27 @@ export default function App() {
 
         {/* Right Action Icons: Dark Mode Toggle & Bell Reminder Notification */}
         <View style={styles.headerRightActions}>
+          {/* User Profile / Login Button */}
+          <TouchableOpacity
+            style={[
+              styles.actionIconButton,
+              {
+                backgroundColor: currentTheme.colors.card,
+                borderColor: currentUser ? '#2E7D32' : currentTheme.colors.border,
+              },
+            ]}
+            onPress={() => {
+              triggerHaptic.selection();
+              setShowAuthModal(true);
+            }}
+          >
+            <Ionicons
+              name={currentUser ? 'person-circle' : 'person-circle-outline'}
+              size={20}
+              color={currentUser ? '#2E7D32' : currentTheme.colors.textDark}
+            />
+          </TouchableOpacity>
+
           {/* Dark Mode Toggle Pill */}
           <TouchableOpacity
             style={[
@@ -679,6 +710,13 @@ export default function App() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
+    
+      {/* Firebase Auth Modal */}
+      <AuthModal
+        visible={showAuthModal}
+        onClose={() => setShowAuthModal(false)}
+        currentUserEmail={currentUser ? currentUser.email : null}
+      />
     </SafeAreaView>
   );
 }
