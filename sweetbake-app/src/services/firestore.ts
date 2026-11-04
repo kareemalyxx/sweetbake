@@ -301,14 +301,27 @@ export const FirestoreService = {
   async saveRequirement(req: GeneralRequirement): Promise<void> {
     const reqId = req.reqId || req.id;
     const reqRef = doc(db, 'requirements', reqId);
-    const dataToSave = {
-      ...req,
+    
+    // Clean out undefined values to prevent Firestore 'Unsupported field value: undefined' errors
+    const cleanedReq: Record<string, any> = {};
+    Object.entries(req).forEach(([key, val]) => {
+      if (val !== undefined) {
+        cleanedReq[key] = val;
+      }
+    });
+
+    const dataToSave: Record<string, any> = {
+      ...cleanedReq,
       id: reqId,
       reqId: reqId,
       createdAt: toFirebaseTimestamp(req.createdAt),
       updatedAt: Timestamp.now(),
-      ...(req.expenseDate ? { expenseDate: toFirebaseTimestamp(req.expenseDate) } : {}),
     };
+
+    if (req.expenseDate) {
+      dataToSave.expenseDate = toFirebaseTimestamp(req.expenseDate);
+    }
+
     await setDoc(reqRef, dataToSave, { merge: true });
   },
 

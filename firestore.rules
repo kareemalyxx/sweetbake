@@ -39,13 +39,15 @@ service cloud.firestore {
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
     //
-    // Collection: /users/{userId}/requirements/{reqId}
+    // Collection: /requirements/{reqId} (and /users/{userId}/requirements/{reqId})
     // Document ID: Auto-generated or UUID string
     // Fields:
     //   - title: string (required, 1..200 chars)
     //   - category: string (required, enum: 'Ingredients'|'Packaging'|'Tools'|'Add-ons')
     //   - isCompleted: bool (required)
     //   - orderId: string (optional, 0..100 chars)
+    //   - expenseAmount: number (optional, >= 0, <= 1000000)
+    //   - expenseDate: timestamp or string (optional, valid timestamp or ISO-8601 string)
     //   - createdAt: timestamp or string (required on create, immutable)
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
@@ -177,7 +179,10 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidRequirement(data) {
-      let allowed = ['id', 'reqId', 'title', 'category', 'isCompleted', 'orderId', 'createdAt', 'updatedAt', 'userId'];
+      let allowed = [
+        'id', 'reqId', 'title', 'category', 'isCompleted', 'orderId',
+        'expenseAmount', 'expenseDate', 'createdAt', 'updatedAt', 'userId'
+      ];
       let validCategories = ['Ingredients', 'Packaging', 'Tools', 'Add-ons'];
 
       return hasOnlyAllowedFields(allowed) &&
@@ -189,6 +194,8 @@ service cloud.firestore {
         (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
         (!('reqId' in data) || (data.reqId is string && data.reqId.size() <= 100)) &&
         (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
+        (!('expenseAmount' in data) || (data.expenseAmount is number && data.expenseAmount >= 0 && data.expenseAmount <= 1000000)) &&
+        (!('expenseDate' in data) || isValidTimestampOrIsoDate(data.expenseDate)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
         (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid));
     }
@@ -243,12 +250,26 @@ service cloud.firestore {
       allow delete: if true;
     }
 
-    // Optional user profile support (for staff profile settings if needed)
+    // Optional user profile support (for staff profile settings or scoped data if needed)
     match /users/{userId} {
       allow read: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(request.resource.data);
       allow update: if isOwner(userId) && isValidUser(request.resource.data) && areImmutableFieldsUnchanged(['createdAt']);
       allow delete: if isOwner(userId);
+
+      match /orders/{orderId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidOrder(request.resource.data);
+        allow update: if isOwner(userId) && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['createdAt', 'id']);
+        allow delete: if isOwner(userId);
+      }
+
+      match /requirements/{reqId} {
+        allow read: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidRequirement(request.resource.data);
+        allow update: if isOwner(userId) && isValidRequirement(request.resource.data) && areImmutableFieldsUnchanged(['createdAt', 'id']);
+        allow delete: if isOwner(userId);
+      }
     }
   }
 }
