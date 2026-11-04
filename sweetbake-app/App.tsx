@@ -136,6 +136,8 @@ export default function App() {
         location: orderData.location || '',
         reminderEnabled: Boolean(orderData.reminderEnabled),
         reminderTiming: orderData.reminderTiming || '1_hour',
+        reminderTimings: orderData.reminderTimings || (orderData.reminderTiming ? [orderData.reminderTiming] : ['1_hour']),
+        customReminderDates: orderData.customReminderDates || [],
         referenceImages: orderData.referenceImages || [],
         createdAt: new Date().toISOString(),
       };
