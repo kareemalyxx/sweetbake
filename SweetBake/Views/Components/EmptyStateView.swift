@@ -36,7 +36,7 @@ struct EmptyCakeStandIllustration: View {
                 )
                 .fill(
                     LinearGradient(
-                        colors: [Color.white.opacity(0.8), Theme.lavenderLight.opacity(0.5)],
+                        colors: [Theme.card.opacity(0.8), Theme.lavenderLight.opacity(0.5)],
                         startPoint: .top,
                         endPoint: .bottom
                     )

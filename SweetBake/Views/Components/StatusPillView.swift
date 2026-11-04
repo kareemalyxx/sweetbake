@@ -37,9 +37,10 @@ struct StatusPillView: View {
     var body: some View {
         HStack(spacing: 5) {
             Image(systemName: status.iconName)
-                .font(.system(size: 10, weight: .bold))
+                .symbolRenderingMode(.hierarchical)
+                .font(.system(size: 11, weight: .bold))
             Text(status.rawValue)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .font(.caption.weight(.semibold))
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)

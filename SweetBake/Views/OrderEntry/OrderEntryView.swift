@@ -53,16 +53,18 @@ struct OrderEntryView: View {
             Form {
                 // Section 1: Customer & Schedule
                 Section {
-                    HStack {
+                    HStack(spacing: 12) {
                         Image(systemName: "person.crop.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.roseGold)
+                            .font(.system(size: 20))
                         TextField("Customer Full Name", text: $customerName)
                             .textContentType(.name)
                     }
                     
-                    VStack(alignment: .leading, spacing: 8) {
+                    VStack(alignment: .leading, spacing: 10) {
                         Label("Delivery / Pickup Date", systemImage: "calendar")
-                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                            .font(.subheadline.weight(.semibold))
                             .foregroundColor(Theme.textMauve)
                         
                         DatePicker(
@@ -77,7 +79,7 @@ struct OrderEntryView: View {
                     }
                 } header: {
                     Text("Client & Schedule")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(Theme.textMauve)
                 }
                 
@@ -102,7 +104,7 @@ struct OrderEntryView: View {
                     }
                 } header: {
                     Text("Cake Specifications")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(Theme.textMauve)
                 }
                 
@@ -118,6 +120,7 @@ struct OrderEntryView: View {
                     
                     HStack {
                         Label("Quoted Price", systemImage: "dollarsign.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.roseGold)
                         Spacer()
                         TextField("Price", value: $quotedPrice, format: .currency(code: "USD"))
@@ -127,7 +130,7 @@ struct OrderEntryView: View {
                     }
                 } header: {
                     Text("Status & Financials")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(Theme.textMauve)
                 }
                 
@@ -138,12 +141,13 @@ struct OrderEntryView: View {
                         maxSelectionCount: 5,
                         matching: .images
                     ) {
-                        HStack {
+                        HStack(spacing: 12) {
                             Image(systemName: "photo.badge.plus")
                                 .font(.system(size: 18))
+                                .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
                             Text(referenceImages.isEmpty ? "Attach Sketches or Inspo Photos" : "Add / Replace Photos")
-                                .font(.system(size: 15, weight: .medium, design: .rounded))
+                                .font(.subheadline.weight(.medium))
                                 .foregroundColor(Theme.textDark)
                             Spacer()
                             if isProcessingPhotos {
@@ -169,9 +173,9 @@ struct OrderEntryView: View {
                                                 .resizable()
                                                 .scaledToFill()
                                                 .frame(width: 80, height: 80)
-                                                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                                 .overlay(
-                                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                                                         .stroke(Theme.pastelRose, lineWidth: 1.5)
                                                 )
                                             
@@ -181,8 +185,9 @@ struct OrderEntryView: View {
                                                 }
                                             }) {
                                                 Image(systemName: "xmark.circle.fill")
-                                                    .foregroundColor(.white)
-                                                    .background(Circle().fill(Color.black.opacity(0.6)))
+                                                    .symbolRenderingMode(.hierarchical)
+                                                    .foregroundColor(Theme.textDark)
+                                                    .background(Circle().fill(Color(UIColor.secondarySystemGroupedBackground)))
                                                     .font(.system(size: 18))
                                             }
                                             .offset(x: 6, y: -6)
@@ -196,7 +201,7 @@ struct OrderEntryView: View {
                     }
                 } header: {
                     Text("Design Sketches & Inspo Photos")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(Theme.textMauve)
                 }
                 
@@ -207,20 +212,21 @@ struct OrderEntryView: View {
                             Text("e.g. Edible gold leaf on top edge, gluten-free base, message 'Happy 30th Sophia' written in mauve script...")
                                 .foregroundColor(Theme.textSecondary.opacity(0.7))
                                 .padding(.top, 8)
-                                .font(.system(size: 14, design: .rounded))
+                                .font(.subheadline)
                         }
                         TextEditor(text: $customRequirements)
                             .frame(minHeight: 90)
-                            .font(.system(size: 14, design: .rounded))
+                            .font(.subheadline)
                     }
                 } header: {
                     Text("Custom Requirements & Dietary Notes")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .font(.footnote.weight(.semibold))
                         .foregroundColor(Theme.textMauve)
                 }
             }
+            .listStyle(.insetGrouped)
             .scrollContentBackground(.hidden)
-            .background(Theme.cream.ignoresSafeArea())
+            .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
             .navigationTitle(orderToEdit == nil ? "New Cake Order" : "Edit Cake Order")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

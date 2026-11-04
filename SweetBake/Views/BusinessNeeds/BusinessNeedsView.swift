@@ -1,294 +1,261 @@
-//
-//  BusinessNeedsView.swift
-//  SweetBake
-//
-
 import SwiftUI
-import SwiftData
 
-struct BusinessNeedsView: View {
-    @Environment(\.modelContext) private var modelContext
-    @Query(sort: \GeneralRequirement.createdAt, order: .forward) private var allRequirements: [GeneralRequirement]
+// MARK: - Premium Native iOS Business Needs & Checklist View
+public struct BusinessNeedsView: View {
+    @Binding public var requirements: [GeneralRequirement]
+    @State private var selectedCategory: RequirementCategory = .addons
+    @State private var newItemTitle: String = ""
     
-    @State private var selectedCategory: RequirementCategory = .ingredients
-    @State private var newRequirementTitle: String = ""
-    @State private var isAddingQuickItem: Bool = false
-    
-    // Checked items visually strike through and move to the bottom of the list
-    private var filteredAndSortedRequirements: [GeneralRequirement] {
-        let matchingCategory = allRequirements.filter { $0.category == selectedCategory }
-        let unchecked = matchingCategory.filter { !$0.isCompleted }
-        let checked = matchingCategory.filter { $0.isCompleted }
-        return unchecked + checked
+    public init(requirements: Binding<[GeneralRequirement]>) {
+        self._requirements = requirements
     }
     
-    private var completedCount: Int {
-        allRequirements.filter { $0.category == selectedCategory && $0.isCompleted }.count
+    private var filteredItems: [GeneralRequirement] {
+        let items = requirements.filter { $0.category == selectedCategory }
+        let uncompleted = items.filter { !$0.isCompleted }
+        let completed = items.filter { $0.isCompleted }
+        return uncompleted + completed
     }
     
-    private var totalCount: Int {
-        allRequirements.filter { $0.category == selectedCategory }.count
-    }
-    
-    var body: some View {
+    public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Category Segmented Selector
-                VStack(spacing: 12) {
-                    HStack(spacing: 8) {
-                        ForEach(RequirementCategory.allCases) { category in
-                            CategoryTabButton(
-                                category: category,
-                                isSelected: selectedCategory == category,
-                                count: allRequirements.filter { $0.category == category && !$0.isCompleted }.count
-                            ) {
-                                HapticManager.shared.selection()
-                                withAnimation(.spring(response: 0.3)) {
-                                    selectedCategory = category
-                                }
-                            }
-                        }
-                    }
+                // Category Pills Segmented Selector
+                categorySelectorBar
                     .padding(.horizontal, 16)
-                    .padding(.top, 10)
-                    
-                    // Progress banner
-                    if totalCount > 0 {
-                        HStack {
-                            Text("\(completedCount) of \(totalCount) completed")
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .foregroundColor(Theme.textSecondary)
-                            
-                            Spacer()
-                            
-                            ProgressView(value: Double(completedCount), total: Double(totalCount))
-                                .progressViewStyle(LinearProgressViewStyle(tint: Theme.deepRose))
-                                .frame(width: 100)
-                        }
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 6)
-                    }
-                }
-                .background(Theme.cream)
+                    .padding(.vertical, 10)
+                    .background(Theme.Colors.secondaryBackground)
                 
-                // Checklist
-                List {
-                    // Quick-add input box
-                    Section {
-                        HStack(spacing: 10) {
-                            Image(systemName: selectedCategory.iconName)
-                                .foregroundColor(Theme.deepRose)
-                                .font(.system(size: 16))
-                            
-                            TextField("Add new \(selectedCategory.rawValue.lowercased()) item...", text: $newRequirementTitle)
-                                .font(.system(size: 15, design: .rounded))
-                                .onSubmit {
-                                    addNewRequirement()
-                                }
-                            
-                            if !newRequirementTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                                Button(action: addNewRequirement) {
-                                    Image(systemName: "arrow.up.circle.fill")
-                                        .font(.system(size: 24))
-                                        .foregroundColor(Theme.deepRose)
-                                }
-                                .buttonStyle(ScaleButtonStyle())
-                            }
-                        }
-                        .padding(.vertical, 8)
-                        .listRowBackground(
-                            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                .fill(Color.white)
-                                .shadow(color: Theme.textDark.opacity(0.04), radius: 6, y: 3)
-                        )
-                        .listRowSeparator(.hidden)
-                    }
-                    
-                    // List of items
-                    Section {
-                        if filteredAndSortedRequirements.isEmpty {
-                            EmptyStateView(
-                                title: "No \(selectedCategory.rawValue) Needed",
-                                subtitle: "Your inventory checklist is clear! Type above to add supplies or tools."
-                            )
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(filteredAndSortedRequirements) { item in
-                                RequirementRowView(item: item) {
+                Divider()
+                
+                // Quick Add Input Box
+                quickAddBar
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                
+                // Progress Sub-header
+                statusSubHeader
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 4)
+                
+                // List of To-Do items in InsetGrouped Style
+                if filteredItems.isEmpty {
+                    Spacer()
+                    EmptyStateView(
+                        title: "No \(selectedCategory.rawValue) Needs",
+                        message: "All \(selectedCategory.rawValue.lowercased()) tasks are completed! Type above to add supplies.",
+                        systemImage: selectedCategory.iconName
+                    )
+                    Spacer()
+                } else {
+                    List {
+                        Section {
+                            ForEach(filteredItems) { item in
+                                RequirementRow(item: item) {
                                     toggleRequirement(item)
                                 }
-                                .listRowBackground(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(item.isCompleted ? Color.white.opacity(0.55) : Color.white)
-                                        .shadow(color: Theme.textDark.opacity(0.03), radius: 4, y: 2)
-                                )
-                                .listRowSeparator(.hidden)
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        deleteRequirement(item)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                }
                             }
+                            .onDelete(perform: deleteRequirement)
                         }
                     }
+                    .listStyle(.insetGrouped)
+                    .scrollContentBackground(.hidden)
+                    .background(Color(UIColor.systemGroupedBackground))
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Theme.cream.ignoresSafeArea())
             }
-            .background(Theme.cream.ignoresSafeArea())
-            .navigationTitle("Business Needs")
+            .background(Color(UIColor.systemGroupedBackground))
+            .navigationTitle("Kitchen Checklist")
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    if !allRequirements.filter({ $0.category == selectedCategory && $0.isCompleted }).isEmpty {
+                ToolbarItem(placement: .primaryAction) {
+                    let hasCompleted = requirements.contains { $0.category == selectedCategory && $0.isCompleted }
+                    if hasCompleted {
                         Button("Clear Done") {
-                            clearCompletedForCurrentCategory()
+                            HapticManager.light()
+                            withAnimation {
+                                requirements.removeAll { $0.category == selectedCategory && $0.isCompleted }
+                            }
                         }
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(Theme.deepRose)
+                        .tint(Theme.Colors.deepRose)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
                     }
                 }
             }
         }
     }
     
-    private func addNewRequirement() {
-        let trimmed = newRequirementTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        
-        HapticManager.shared.impact(style: .light)
-        let requirement = GeneralRequirement(
-            title: trimmed,
-            category: selectedCategory,
-            isCompleted: false
+    // MARK: - Category Selector Bar
+    private var categorySelectorBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(RequirementCategory.allCases, id: \.self) { cat in
+                    let isSelected = selectedCategory == cat
+                    let pendingCount = requirements.filter { $0.category == cat && !$0.isCompleted }.count
+                    
+                    Button {
+                        HapticManager.selection()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            selectedCategory = cat
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: cat.iconName)
+                                .symbolRenderingMode(.hierarchical)
+                                .font(.caption)
+                            
+                            Text(cat.rawValue)
+                                .font(.subheadline)
+                                .fontWeight(isSelected ? .bold : .medium)
+                            
+                            if pendingCount > 0 {
+                                Text("\(pendingCount)")
+                                    .font(.caption2)
+                                    .fontWeight(.bold)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(isSelected ? Color.white.opacity(0.3) : Theme.Colors.blushPink))
+                                    .foregroundColor(isSelected ? .white : Theme.Colors.deepRose)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(
+                            Capsule()
+                                .fill(isSelected ? Theme.Colors.deepRose : Theme.Colors.warmIvory)
+                        )
+                        .foregroundColor(isSelected ? .white : Theme.Colors.textDark)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+    
+    // MARK: - Quick Add Bar
+    private var quickAddBar: some View {
+        HStack(spacing: 10) {
+            Image(systemName: selectedCategory.iconName)
+                .symbolRenderingMode(.hierarchical)
+                .foregroundColor(Theme.Colors.deepRose)
+                .font(.body)
+            
+            TextField("Add \(selectedCategory.rawValue.lowercased()) requirement...", text: $newItemTitle)
+                .font(.subheadline)
+                .submitLabel(.done)
+                .onSubmit(addNewItem)
+            
+            if !newItemTitle.trimmingCharacters(in: .whitespaces).isEmpty {
+                Button(action: addNewItem) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .symbolRenderingMode(.multicolor)
+                        .font(.title2)
+                        .foregroundColor(Theme.Colors.deepRose)
+                }
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Theme.Colors.secondaryBackground)
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+    }
+    
+    // MARK: - Sub Header
+    private var statusSubHeader: some View {
+        let uncompleted = filteredItems.filter { !$0.isCompleted }.count
+        let completed = filteredItems.filter { $0.isCompleted }.count
         
-        withAnimation(.spring(response: 0.35)) {
-            modelContext.insert(requirement)
-            try? modelContext.save()
-            newRequirementTitle = ""
+        return HStack {
+            Text("\(uncompleted) to do • \(completed) completed")
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(Theme.Colors.textSecondary)
+            Spacer()
+        }
+    }
+    
+    private func addNewItem() {
+        let trimmed = newItemTitle.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        HapticManager.light()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            requirements.insert(
+                GeneralRequirement(
+                    title: trimmed,
+                    category: selectedCategory
+                ),
+                at: 0
+            )
+            newItemTitle = ""
         }
     }
     
     private func toggleRequirement(_ item: GeneralRequirement) {
-        // Haptic feedback for checking off tasks
-        HapticManager.shared.impact(style: .medium)
-        
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
-            item.isCompleted.toggle()
-            try? modelContext.save()
+        guard let index = requirements.firstIndex(where: { $0.id == item.id }) else { return }
+        HapticManager.medium()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+            requirements[index].isCompleted.toggle()
         }
     }
     
-    private func deleteRequirement(_ item: GeneralRequirement) {
-        HapticManager.shared.notification(type: .warning)
+    private func deleteRequirement(at offsets: IndexSet) {
+        HapticManager.light()
         withAnimation {
-            modelContext.delete(item)
-            try? modelContext.save()
-        }
-    }
-    
-    private func clearCompletedForCurrentCategory() {
-        HapticManager.shared.notification(type: .success)
-        let completed = allRequirements.filter { $0.category == selectedCategory && $0.isCompleted }
-        withAnimation {
-            for item in completed {
-                modelContext.delete(item)
-            }
-            try? modelContext.save()
+            let itemsToDelete = offsets.map { filteredItems[$0].id }
+            requirements.removeAll { itemsToDelete.contains($0.id) }
         }
     }
 }
 
-// Category pill button
-private struct CategoryTabButton: View {
-    let category: RequirementCategory
-    let isSelected: Bool
-    let count: Int
-    let action: () -> Void
-    
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 6) {
-                Image(systemName: category.iconName)
-                    .font(.system(size: 12))
-                
-                Text(category.rawValue)
-                    .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
-                
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(isSelected ? Color.white.opacity(0.25) : Theme.blushPink)
-                        .foregroundColor(isSelected ? .white : Theme.deepRose)
-                        .clipShape(Capsule())
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 10)
-            .background(isSelected ? Theme.deepRose : Color.white)
-            .foregroundColor(isSelected ? .white : Theme.textDark)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .shadow(color: Theme.textDark.opacity(isSelected ? 0.12 : 0.03), radius: 5, y: 2)
-            .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? Theme.deepRose : Theme.pastelRose.opacity(0.3), lineWidth: 1)
-            )
-        }
-        .buttonStyle(ScaleButtonStyle(scaleAmount: 0.96))
-    }
-}
-
-// Requirement Row
-private struct RequirementRowView: View {
+// MARK: - Requirement Row View
+struct RequirementRow: View {
     let item: GeneralRequirement
     let onToggle: () -> Void
     
     var body: some View {
         HStack(spacing: 12) {
             Button(action: onToggle) {
-                ZStack {
-                    Circle()
-                        .stroke(item.isCompleted ? Theme.deliveredGreenDark : Theme.pastelRose, lineWidth: 2)
-                        .frame(width: 24, height: 24)
-                    
-                    if item.isCompleted {
-                        Circle()
-                            .fill(Theme.deliveredGreenDark)
-                            .frame(width: 24, height: 24)
-                        
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                    }
+                Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
+                    .symbolRenderingMode(item.isCompleted ? .hierarchical : .monochrome)
+                    .font(.title3)
+                    .foregroundColor(item.isCompleted ? Theme.Colors.Status.deliveredDark : Theme.Colors.pastelRose)
+            }
+            .buttonStyle(.plain)
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.title)
+                    .font(.body)
+                    .strikethrough(item.isCompleted)
+                    .foregroundColor(item.isCompleted ? Theme.Colors.textSecondary : Theme.Colors.textDark)
+                
+                if item.category == .addons {
+                    Text("Add-on Item")
+                        .font(.caption2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(Theme.Colors.deepRose)
                 }
             }
-            .buttonStyle(ScaleButtonStyle(scaleAmount: 0.88))
-            
-            Text(item.title)
-                .font(.system(size: 15, weight: item.isCompleted ? .regular : .medium, design: .rounded))
-                .foregroundColor(item.isCompleted ? Theme.textSecondary : Theme.textDark)
-                .strikethrough(item.isCompleted, color: Theme.textSecondary)
-                .animation(.spring(response: 0.3), value: item.isCompleted)
             
             Spacer()
         }
-        .padding(.vertical, 6)
+        .padding(.vertical, 4)
         .contentShape(Rectangle())
-        .onTapGesture {
-            onToggle()
-        }
+        .onTapGesture(perform: onToggle)
     }
 }
 
-#Preview {
-    BusinessNeedsView()
-        .modelContainer(for: GeneralRequirement.self, inMemory: true)
+extension RequirementCategory {
+    var iconName: String {
+        switch self {
+        case .addons: return "sparkles"
+        case .ingredients: return "cup.and.saucer.fill"
+        case .packaging: return "shippingbox.fill"
+        case .tools: return "wrench.and.screwdriver.fill"
+        }
+    }
 }
-

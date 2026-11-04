@@ -1,262 +1,245 @@
-//
-//  DashboardView.swift
-//  SweetBake
-//
-
 import SwiftUI
-import SwiftData
 
-struct DashboardView: View {
-    @Environment(\.modelContext) private var modelContext
+// MARK: - Premium Native iOS Dashboard View
+public struct DashboardView: View {
+    @Binding public var orders: [Order]
+    @State private var selectedFilter: OrderStatus? = nil
+    @State private var showingOrderEntry = false
+    @State private var orderToEdit: Order? = nil
+    @State private var selectedDateFilter: Date? = nil
+    @State private var searchText = ""
     
-    // Fetch upcoming and past orders sorted ascending by deliveryDate
-    @Query(sort: \Order.deliveryDate, order: .forward) private var allOrders: [Order]
-    
-    @State private var searchText: String = ""
-    @State private var selectedStatusFilter: OrderStatus? = nil
-    @State private var showingAddOrderSheet = false
+    public init(orders: Binding<[Order]>) {
+        self._orders = orders
+    }
     
     private var filteredOrders: [Order] {
-        allOrders.filter { order in
-            let matchesSearch: Bool
-            if searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                matchesSearch = true
+        orders.filter { order in
+            let matchesStatus = selectedFilter == nil || order.status == selectedFilter
+            let matchesSearch = searchText.isEmpty ||
+                order.customerName.localizedCaseInsensitiveContains(searchText) ||
+                order.cakeType.localizedCaseInsensitiveContains(searchText) ||
+                order.flavor.localizedCaseInsensitiveContains(searchText)
+            
+            let matchesDate: Bool
+            if let filterDate = selectedDateFilter {
+                matchesDate = Calendar.current.isDate(order.deliveryDate, inSameDayAs: filterDate)
             } else {
-                let term = searchText.lowercased()
-                matchesSearch = order.customerName.lowercased().contains(term) ||
-                                order.cakeType.lowercased().contains(term) ||
-                                order.flavor.lowercased().contains(term) ||
-                                order.shape.lowercased().contains(term)
+                matchesDate = true
             }
             
-            let matchesStatus: Bool
-            if let filter = selectedStatusFilter {
-                matchesStatus = (order.status == filter)
-            } else {
-                matchesStatus = true
-            }
-            
-            return matchesSearch && matchesStatus
+            return matchesStatus && matchesSearch && matchesDate
         }
     }
     
-    var body: some View {
+    public var body: some View {
         NavigationStack {
-            ZStack(alignment: .bottomTrailing) {
-                List {
-                    // Header Metrics Section
-                    Section {
-                        VStack(spacing: 14) {
-                            NextSevenDaysWidget(orders: allOrders)
-                            RevenueTrackerView(orders: allOrders)
-                        }
-                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    }
+            ScrollView {
+                LazyVStack(spacing: 16) {
+                    // 1. Next 7 Days Rush interactive timeline widget
+                    NextSevenDaysWidget(
+                        orders: orders,
+                        selectedDateFilter: $selectedDateFilter
+                    )
+                    .padding(.horizontal, 16)
                     
-                    // Quick Status Filter Pills
-                    Section {
-                        ScrollView(.horizontal, showsIndicators: false) {
-                            HStack(spacing: 8) {
-                                FilterChip(
-                                    title: "All Orders",
-                                    isSelected: selectedStatusFilter == nil,
-                                    count: allOrders.count
-                                ) {
-                                    HapticManager.shared.selection()
-                                    selectedStatusFilter = nil
-                                }
-                                
-                                ForEach(OrderStatus.allCases) { status in
-                                    let count = allOrders.filter { $0.status == status }.count
-                                    FilterChip(
-                                        title: status.rawValue,
-                                        isSelected: selectedStatusFilter == status,
-                                        count: count
-                                    ) {
-                                        HapticManager.shared.selection()
-                                        selectedStatusFilter = status
-                                    }
-                                }
-                            }
+                    // 2. Revenue Tracker (Pipeline vs Delivered)
+                    RevenueTrackerView(orders: orders)
+                        .padding(.horizontal, 16)
+                    
+                    // 3. Status Filters Bar
+                    statusFilterBar
+                        .padding(.horizontal, 16)
+                    
+                    // 4. Active Date Filter Pill
+                    if let activeDate = selectedDateFilter {
+                        activeDateBanner(for: activeDate)
                             .padding(.horizontal, 16)
-                            .padding(.vertical, 4)
-                        }
-                        .listRowInsets(EdgeInsets())
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
                     }
                     
-                    // Order Timeline Feed
-                    Section {
-                        if filteredOrders.isEmpty {
-                            EmptyStateView(
-                                title: allOrders.isEmpty ? "No Cake Orders Yet" : "No Matching Orders",
-                                subtitle: allOrders.isEmpty
-                                    ? "Tap the '+' button to log your first bespoke cake commission."
-                                    : "Try refining your search filter or add a new custom order.",
-                                actionTitle: allOrders.isEmpty ? "Create Cake Order" : nil,
-                                action: allOrders.isEmpty ? { showingAddOrderSheet = true } : nil
-                            )
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                        } else {
-                            ForEach(filteredOrders) { order in
-                                NavigationLink(destination: OrderDetailView(order: order)) {
-                                    OrderRowView(order: order)
-                                }
-                                .listRowBackground(
-                                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                        .fill(Color.white)
-                                        .padding(.vertical, 4)
-                                        .shadow(color: Theme.textDark.opacity(0.04), radius: 6, y: 3)
-                                )
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-                                .swipeActions(edge: .leading, allowsFullSwipe: true) {
-                                    // Quick advance status swipe action
-                                    if let next = order.status.nextStatus {
-                                        Button {
-                                            advanceOrderStatus(order, to: next)
-                                        } label: {
-                                            Label("Mark \(next.rawValue)", systemImage: next.iconName)
-                                        }
-                                        .tint(colorForStatus(next))
-                                    }
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button(role: .destructive) {
-                                        deleteOrder(order)
-                                    } label: {
-                                        Label("Delete", systemImage: "trash")
-                                    }
-                                    
-                                    // Step backwards in status if needed
-                                    if order.status != .pending {
-                                        Button {
-                                            setOrderStatus(order, to: .pending)
-                                        } label: {
-                                            Label("Pending", systemImage: "arrow.uturn.backward")
-                                        }
-                                        .tint(Theme.pendingOrangeDark)
-                                    }
-                                }
-                            }
-                        }
-                    } header: {
-                        HStack {
-                            Text("Scheduled Commissions (\(filteredOrders.count))")
-                                .font(.system(size: 14, weight: .bold, design: .rounded))
-                                .foregroundColor(Theme.textMauve)
-                            Spacer()
-                        }
-                        .padding(.top, 4)
-                    }
+                    // 5. Orders Feed Section
+                    ordersFeedSection
+                        .padding(.horizontal, 16)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .background(Theme.cream.ignoresSafeArea())
-                
-                // Floating Action Button (FAB)
-                Button(action: {
-                    HapticManager.shared.impact(style: .medium)
-                    showingAddOrderSheet = true
-                }) {
-                    ZStack {
-                        Circle()
-                            .fill(Theme.roseGoldGradient)
-                            .frame(width: 60, height: 60)
-                            .shadow(color: Theme.roseGold.opacity(0.45), radius: 10, x: 0, y: 5)
-                        
-                        Image(systemName: "plus")
-                            .font(.system(size: 24, weight: .bold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .buttonStyle(ScaleButtonStyle(scaleAmount: 0.92))
-                .padding(.trailing, 22)
-                .padding(.bottom, 22)
+                .padding(.vertical, 12)
             }
+            .background(Color(UIColor.systemGroupedBackground))
             .navigationTitle("SweetBake Studio")
             .navigationBarTitleDisplayMode(.large)
-            .searchable(
-                text: $searchText,
-                placement: .navigationBarDrawer(displayMode: .automatic),
-                prompt: "Search customer, flavor, cake type..."
-            )
-            .sheet(isPresented: $showingAddOrderSheet) {
-                OrderEntryView()
+            .searchable(text: $searchText, prompt: "Search orders, flavors, clients...")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        HapticManager.selection()
+                        showingOrderEntry = true
+                    } label: {
+                        Label("New Order", systemImage: "plus")
+                            .symbolRenderingMode(.hierarchical)
+                            .fontWeight(.semibold)
+                    }
+                    .tint(Theme.Colors.deepRose)
+                }
+            }
+            .sheet(isPresented: $showingOrderEntry) {
+                OrderEntryView(orders: $orders)
+            }
+            .sheet(item: $orderToEdit) { order in
+                OrderEntryView(orders: $orders, orderToEdit: order)
             }
         }
     }
     
-    private func advanceOrderStatus(_ order: Order, to next: OrderStatus) {
-        HapticManager.shared.impact(style: .medium)
-        withAnimation {
-            order.status = next
-            try? modelContext.save()
+    // MARK: - Status Filter Bar (Native Segmented Chips)
+    private var statusFilterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                FilterChip(
+                    title: "All",
+                    count: orders.count,
+                    isSelected: selectedFilter == nil
+                ) {
+                    HapticManager.selection()
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        selectedFilter = nil
+                    }
+                }
+                
+                ForEach(OrderStatus.allCases, id: \.self) { status in
+                    let count = orders.filter { $0.status == status }.count
+                    FilterChip(
+                        title: status.rawValue,
+                        count: count,
+                        isSelected: selectedFilter == status
+                    ) {
+                        HapticManager.selection()
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                            selectedFilter = (selectedFilter == status) ? nil : status
+                        }
+                    }
+                }
+            }
         }
     }
     
-    private func setOrderStatus(_ order: Order, to status: OrderStatus) {
-        HapticManager.shared.impact(style: .light)
-        withAnimation {
-            order.status = status
-            try? modelContext.save()
+    // MARK: - Active Date Banner
+    private func activeDateBanner(for date: Date) -> some View {
+        HStack {
+            Image(systemName: "calendar.badge.clock")
+                .symbolRenderingMode(.multicolor)
+                .font(.subheadline)
+            
+            Text("Filtering for \(date.formatted(.dateTime.weekday(.wide).month().day()))")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(Theme.Colors.textDark)
+            
+            Spacer()
+            
+            Button {
+                HapticManager.light()
+                withAnimation {
+                    selectedDateFilter = nil
+                }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .symbolRenderingMode(.hierarchical)
+                    .foregroundColor(Theme.Colors.textSecondary)
+                    .font(.body)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Theme.Colors.lavenderLight)
+        )
+    }
+    
+    // MARK: - Orders Feed Section
+    @ViewBuilder
+    private var ordersFeedSection: some View {
+        if filteredOrders.isEmpty {
+            EmptyStateView(
+                title: "No Cake Orders Found",
+                message: selectedFilter != nil || selectedDateFilter != nil || !searchText.isEmpty
+                    ? "Try adjusting your search terms or filters."
+                    : "Tap the + button above to schedule your first custom cake commission!",
+                systemImage: "birthday.cake"
+            )
+            .padding(.top, 24)
+        } else {
+            VStack(spacing: 12) {
+                ForEach(filteredOrders) { order in
+                    OrderRowView(
+                        order: order,
+                        onQuickAdvance: {
+                            advanceStatus(for: order)
+                        },
+                        onDelete: {
+                            deleteOrder(order)
+                        }
+                    )
+                    .onTapGesture {
+                        orderToEdit = order
+                    }
+                }
+            }
+        }
+    }
+    
+    private func advanceStatus(for order: Order) {
+        guard let index = orders.firstIndex(where: { $0.id == order.id }) else { return }
+        HapticManager.medium()
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            orders[index].status = orders[index].status.next
         }
     }
     
     private func deleteOrder(_ order: Order) {
-        HapticManager.shared.notification(type: .warning)
-        withAnimation {
-            modelContext.delete(order)
-            try? modelContext.save()
-        }
-    }
-    
-    private func colorForStatus(_ status: OrderStatus) -> Color {
-        switch status {
-        case .pending: return Theme.pendingOrangeDark
-        case .baking: return Theme.bakingBlueDark
-        case .decorating: return Theme.decoratingPurpleDark
-        case .delivered: return Theme.deliveredGreenDark
+        HapticManager.light()
+        withAnimation(.easeOut(duration: 0.25)) {
+            orders.removeAll { $0.id == order.id }
         }
     }
 }
 
-private struct FilterChip: View {
+// MARK: - Filter Chip Component
+struct FilterChip: View {
     let title: String
-    let isSelected: Bool
     let count: Int
+    let isSelected: Bool
     let action: () -> Void
     
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(title)
-                    .font(.system(size: 13, weight: isSelected ? .bold : .medium, design: .rounded))
-                Text("(\(count))")
-                    .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .opacity(0.8)
+                    .font(.subheadline)
+                    .fontWeight(isSelected ? .bold : .medium)
+                
+                Text("\(count)")
+                    .font(.caption2)
+                    .fontWeight(.bold)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(
+                        Capsule()
+                            .fill(isSelected ? Color.white.opacity(0.3) : Theme.Colors.blushPink)
+                    )
+                    .foregroundColor(isSelected ? .white : Theme.Colors.deepRose)
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(isSelected ? Theme.deepRose : Color.white)
-            .foregroundColor(isSelected ? .white : Theme.textDark)
-            .clipShape(Capsule())
-            .shadow(color: Theme.textDark.opacity(isSelected ? 0.15 : 0.04), radius: 4, y: 2)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(isSelected ? Theme.Colors.deepRose : Theme.Colors.secondaryBackground)
+            )
+            .foregroundColor(isSelected ? .white : Theme.Colors.textDark)
             .overlay(
                 Capsule()
-                    .stroke(isSelected ? Theme.deepRose : Theme.pastelRose.opacity(0.4), lineWidth: 1)
+                    .stroke(isSelected ? Color.clear : Theme.Colors.border, lineWidth: 1)
             )
         }
-        .buttonStyle(ScaleButtonStyle(scaleAmount: 0.95))
+        .buttonStyle(.plain)
     }
 }
-
-#Preview {
-    DashboardView()
-        .modelContainer(for: Order.self, inMemory: true)
-}
-
