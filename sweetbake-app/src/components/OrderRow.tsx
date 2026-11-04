@@ -112,12 +112,27 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               </View>
             ) : null}
 
-            {order.addons && order.addons.length > 0 ? (
+            {order.addons && (Array.isArray(order.addons) ? order.addons.length > 0 : Object.keys(order.addons).length > 0) ? (
               <View style={styles.addonsPill}>
                 <Ionicons name="sparkles" size={10} color={Theme.colors.deepRose} style={{ marginRight: 3 }} />
-                <Text style={styles.addonsText} numberOfLines={1}>
-                  +{order.addons.length} Add-on{order.addons.length > 1 ? 's' : ''}
-                </Text>
+                {(() => {
+                  if (Array.isArray(order.addons)) {
+                    return (
+                      <Text style={styles.addonsText} numberOfLines={1}>
+                        +{order.addons.length} Add-on{order.addons.length > 1 ? 's' : ''}
+                      </Text>
+                    );
+                  }
+                  const addonEntries = Object.entries(order.addons);
+                  const completedCount = addonEntries.filter(([_, done]) => done).length;
+                  const totalCount = addonEntries.length;
+                  return (
+                    <Text style={styles.addonsText} numberOfLines={1}>
+                      {completedCount === totalCount ? '✓ ' : ''}
+                      {completedCount}/{totalCount} Add-on{totalCount > 1 ? 's' : ''}
+                    </Text>
+                  );
+                })()}
               </View>
             ) : null}
 

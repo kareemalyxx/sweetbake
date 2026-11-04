@@ -121,7 +121,7 @@ export default function App() {
         cakeType: orderData.cakeType || 'Celebration Cake',
         shape: orderData.shape || 'Round',
         flavor: orderData.flavor || 'Vanilla Bean & Berry',
-        addons: orderData.addons || [],
+        addons: orderData.addons || {},
         customRequirements: orderData.customRequirements || '',
         status: orderData.status || 'Pending',
         quotedPrice: totalVal,
@@ -157,33 +157,49 @@ export default function App() {
     }
 
     // Synchronize Add-ons with Checklist (Business Needs)
-    if (orderData.addons && orderData.addons.length > 0) {
+    if (orderData.addons) {
       const clientName = orderData.customerName || 'Cake Order';
       let currentReqs = [...requirements];
 
-      for (const addon of orderData.addons) {
-        const itemTitle = `${addon} (for ${clientName})`;
-        // Check if already in requirements
-        const exists = currentReqs.some(
-          (r) =>
-            r.category === 'Add-ons' &&
-            (r.title === itemTitle || (r.orderId === targetOrderId && r.title.startsWith(addon)))
-        );
-        if (!exists) {
-          const newReq: GeneralRequirement = {
-            id: `addon-req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            title: itemTitle,
-            category: 'Add-ons',
-            isCompleted: false,
-            orderId: targetOrderId,
-            createdAt: new Date().toISOString(),
-          };
-          currentReqs = [newReq, ...currentReqs];
-        }
-      }
+      // Handle both Map (Record<string, boolean>) and legacy array
+      const addonEntries: [string, boolean][] = Array.isArray(orderData.addons)
+        ? orderData.addons.map((a: string) => [a, false])
+        : Object.entries(orderData.addons);
 
-      setRequirements(currentReqs);
-      await StorageService.saveRequirements(currentReqs);
+      if (addonEntries.length > 0) {
+        for (const [addon, isDone] of addonEntries) {
+          const itemTitle = `${addon} (for ${clientName})`;
+          // Check if already in requirements
+          const existingIndex = currentReqs.findIndex(
+            (r) =>
+              r.category === 'Add-ons' &&
+              (r.title === itemTitle || (r.orderId === targetOrderId && r.title.startsWith(addon)))
+          );
+
+          if (existingIndex >= 0) {
+            // Update completion status if changed
+            if (currentReqs[existingIndex].isCompleted !== isDone) {
+              currentReqs[existingIndex] = {
+                ...currentReqs[existingIndex],
+                isCompleted: isDone,
+              };
+            }
+          } else {
+            const newReq: GeneralRequirement = {
+              id: `addon-req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+              title: itemTitle,
+              category: 'Add-ons',
+              isCompleted: isDone,
+              orderId: targetOrderId,
+              createdAt: new Date().toISOString(),
+            };
+            currentReqs = [newReq, ...currentReqs];
+          }
+        }
+
+        setRequirements(currentReqs);
+        await StorageService.saveRequirements(currentReqs);
+      }
     }
   };
 
@@ -240,11 +256,48 @@ export default function App() {
 
   // Requirements State Handlers
   const handleToggleRequirement = async (id: string) => {
+    const targetReq = requirements.find((r) => r.id === id);
     const updated = requirements.map((r) =>
       r.id === id ? { ...r, isCompleted: !r.isCompleted } : r
     );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+
+    // If this requirement is linked to an order's addon, sync the boolean to the order
+    if (targetReq && targetReq.orderId && targetReq.category === 'Add-ons') {
+      const newStatus = !targetReq.isCompleted;
+      const linkedOrder = orders.find((o) => o.id === targetReq.orderId);
+      if (linkedOrder && linkedOrder.addons) {
+        let updatedOrderAddons: Record<string, boolean>;
+        if (Array.isArray(linkedOrder.addons)) {
+          updatedOrderAddons = {};
+          linkedOrder.addons.forEach((a: string) => {
+            updatedOrderAddons[a] = targetReq.title.startsWith(a) ? newStatus : false;
+          });
+        } else {
+          updatedOrderAddons = { ...linkedOrder.addons };
+          for (const key of Object.keys(updatedOrderAddons)) {
+            if (targetReq.title.startsWith(key)) {
+              updatedOrderAddons[key] = newStatus;
+            }
+          }
+        }
+        const updatedOrdersList = orders.map((o) =>
+          o.id === linkedOrder.id ? { ...o, addons: updatedOrderAddons } : o
+        );
+        setOrders(updatedOrdersList);
+        await StorageService.saveOrders(updatedOrdersList);
+
+        if (currentUser) {
+          const syncedOrder = updatedOrdersList.find((o) => o.id === linkedOrder.id);
+          if (syncedOrder) {
+            FirestoreService.saveOrder(currentUser.uid, syncedOrder).catch((e) =>
+              console.warn('Failed to sync updated order addons to Firestore:', e)
+            );
+          }
+        }
+      }
+    }
 
     if (currentUser) {
       const toggled = updated.find((r) => r.id === id);

@@ -49,7 +49,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [cakeType, setCakeType] = useState(CAKE_TYPES[0]);
   const [shape, setShape] = useState(CAKE_SHAPES[0]);
   const [flavor, setFlavor] = useState(CAKE_FLAVORS[0]);
-  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
+  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>({});
   const [status, setStatus] = useState<OrderStatus>('Pending');
 
   // Fulfillment & Location
@@ -123,7 +123,16 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(orderToEdit.shape);
       setFlavor(orderToEdit.flavor);
       setStatus(orderToEdit.status);
-      setSelectedAddons(orderToEdit.addons || []);
+      // Convert list to map if legacy array format, otherwise use map
+      if (Array.isArray(orderToEdit.addons)) {
+        const addonMap: Record<string, boolean> = {};
+        orderToEdit.addons.forEach((item: string) => {
+          addonMap[item] = false;
+        });
+        setSelectedAddons(addonMap);
+      } else {
+        setSelectedAddons(orderToEdit.addons || {});
+      }
       setTotalPaymentStr(String(orderToEdit.quotedPrice ?? 85));
       setDownPaymentStr(String(orderToEdit.downPayment ?? 0));
       setFulfillmentType(orderToEdit.fulfillmentType || 'Pickup');
@@ -139,7 +148,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
       setStatus('Pending');
-      setSelectedAddons([]);
+      setSelectedAddons({});
       setTotalPaymentStr('85');
       setDownPaymentStr('0');
       setFulfillmentType('Pickup');
@@ -249,8 +258,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     const trimmed = newAddonInput.trim();
     if (!trimmed) return;
     if (availableAddons.includes(trimmed)) {
-      if (!selectedAddons.includes(trimmed)) {
-        setSelectedAddons([...selectedAddons, trimmed]);
+      if (selectedAddons[trimmed] === undefined) {
+        setSelectedAddons({ ...selectedAddons, [trimmed]: false });
       }
       setNewAddonInput('');
       setShowAddAddon(false);
@@ -259,7 +268,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     triggerHaptic.success();
     const updated = [...availableAddons, trimmed];
     setAvailableAddons(updated);
-    setSelectedAddons([...selectedAddons, trimmed]);
+    setSelectedAddons({ ...selectedAddons, [trimmed]: false });
     setNewAddonInput('');
     setShowAddAddon(false);
     await StorageService.saveCakeAddons(updated);
@@ -267,10 +276,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
   const toggleAddon = (addon: string) => {
     triggerHaptic.selection();
-    if (selectedAddons.includes(addon)) {
-      setSelectedAddons(selectedAddons.filter((a) => a !== addon));
+    if (selectedAddons[addon] !== undefined) {
+      const next = { ...selectedAddons };
+      delete next[addon];
+      setSelectedAddons(next);
     } else {
-      setSelectedAddons([...selectedAddons, addon]);
+      setSelectedAddons({ ...selectedAddons, [addon]: false });
     }
   };
 
@@ -311,8 +322,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     } else if (category === 'Add-on') {
       const updated = availableAddons.map((a) => (a === oldValue ? newVal : a));
       setAvailableAddons(updated);
-      if (selectedAddons.includes(oldValue)) {
-        setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? newVal : a)));
+      if (selectedAddons[oldValue] !== undefined) {
+        const next = { ...selectedAddons };
+        const isDone = next[oldValue];
+        delete next[oldValue];
+        next[newVal] = isDone;
+        setSelectedAddons(next);
       }
       await StorageService.saveCakeAddons(updated);
     }
@@ -329,7 +344,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsMultipleSelection: true,
         quality: 0.7,
       });
@@ -846,7 +861,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {availableAddons.map((addon) => {
-                  const isSelected = selectedAddons.includes(addon);
+                  const isSelected = selectedAddons[addon] !== undefined;
+                  const isDone = Boolean(selectedAddons[addon]);
                   return (
                     <TouchableOpacity
                       key={addon}
@@ -862,7 +878,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                         style={{ marginRight: 5 }}
                       />
                       <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                        {addon}
+                        {addon} {isSelected && (isDone ? '✓' : '')}
                       </Text>
                     </TouchableOpacity>
                   );

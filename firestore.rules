@@ -33,8 +33,9 @@ service cloud.firestore {
     //   - location: string (optional, 0..300 chars)
     //   - reminderEnabled: bool (optional)
     //   - reminderTiming: string (optional, enum: 'on_time'|'15_min'|'1_hour'|'2_hours'|'1_day')
-    //   - addons: list of strings (optional, max 30 items, each <= 100 chars)
-    //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
+    //   - addons: map of addon name to boolean status (optional, max 30 entries) or legacy list of strings
+    // 
+     - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
     //   - createdAt: timestamp or string (required on create, immutable)
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
@@ -143,7 +144,7 @@ service cloud.firestore {
         (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&
-        (!('addons' in data) || (data.addons is list && data.addons.size() <= 30)) &&
+        (!('addons' in data) || (data.addons is map && data.addons.size() <= 30) || (data.addons is list && data.addons.size() <= 30)) &&
         (!('referenceImages' in data) || (data.referenceImages is list && data.referenceImages.size() <= 10)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
         (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid));

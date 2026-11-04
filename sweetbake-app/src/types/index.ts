@@ -11,7 +11,7 @@ export interface CakeOrder {
   cakeType: string;
   shape: string;
   flavor: string;
-  addons?: string[]; // Multiselection for custom addons (Topper, Flowers, Pictures, etc.)
+  addons?: Record<string, boolean>; // Map of custom addons to completed status (e.g. { "Topper": false, "Flowers": true })
   customRequirements: string;
   status: OrderStatus;
   quotedPrice: number;
