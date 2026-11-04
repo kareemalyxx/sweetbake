@@ -31,7 +31,9 @@ export interface CakeOrder {
   fulfillmentType?: FulfillmentType; // 'Pickup' | 'Delivery'
   location?: string; // Delivery address or Pickup location notes
   reminderEnabled?: boolean; // In-app reminder active
-  reminderTiming?: ReminderTiming; // When to be notified
+  reminderTiming?: ReminderTiming; // Legacy single reminder timing
+  reminderTimings?: ReminderTiming[]; // Multiple reminder notifications (e.g., ['15_min', '1_hour', '1_day'])
+  notificationTimestamps?: string[]; // Calculated trigger timestamps (ISO strings) based on deliveryDate - offset
   referenceImages: string[]; // Base64 or local file URIs
   createdAt: string;
 }

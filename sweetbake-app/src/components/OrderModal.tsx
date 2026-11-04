@@ -67,9 +67,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [expenseNotes, setExpenseNotes] = useState('');
   const [showAddExpense, setShowAddExpense] = useState(false);
 
-  // Reminders
+  // Reminders (support multiple notification timings)
   const [reminderEnabled, setReminderEnabled] = useState(false);
-  const [reminderTiming, setReminderTiming] = useState<ReminderTiming>('1_hour');
+  const [reminderTimings, setReminderTimings] = useState<ReminderTiming[]>(['1_hour']);
 
   const [customRequirements, setCustomRequirements] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -148,7 +148,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setFulfillmentType(orderToEdit.fulfillmentType || 'Pickup');
       setLocation(orderToEdit.location || '');
       setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
-      setReminderTiming(orderToEdit.reminderTiming || '1_hour');
+      if (Array.isArray(orderToEdit.reminderTimings) && orderToEdit.reminderTimings.length > 0) {
+        setReminderTimings(orderToEdit.reminderTimings);
+      } else if (orderToEdit.reminderTiming) {
+        setReminderTimings([orderToEdit.reminderTiming]);
+      } else {
+        setReminderTimings(['1_hour']);
+      }
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
@@ -169,7 +175,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setFulfillmentType('Pickup');
       setLocation('');
       setReminderEnabled(false);
-      setReminderTiming('1_hour');
+      setReminderTimings(['1_hour']);
       setCustomRequirements('');
       setReferenceImages([]);
 
@@ -422,7 +428,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       fulfillmentType,
       location: location.trim(),
       reminderEnabled,
-      reminderTiming: reminderEnabled ? reminderTiming : undefined,
+      reminderTiming: reminderEnabled ? reminderTimings[0] : undefined,
+      reminderTimings: reminderEnabled ? reminderTimings : [],
       customRequirements: customRequirements.trim(),
       deliveryDate: deliveryDate.toISOString(),
       referenceImages,
@@ -705,24 +712,30 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
                 {reminderEnabled && (
                   <View style={styles.timingSelectBox}>
-                    <Text style={styles.timingLabel}>When should we remind you?</Text>
+                    <Text style={styles.timingLabel}>Select Reminder Times (Choose multiple)</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.timingChipRow}>
                       {REMINDER_OPTIONS.map((opt) => {
-                        const isChosen = reminderTiming === opt.value;
+                        const isChosen = reminderTimings.includes(opt.value);
                         return (
                           <TouchableOpacity
                             key={opt.value}
                             style={[styles.timingChip, isChosen && styles.timingChipActive]}
                             onPress={() => {
                               triggerHaptic.selection();
-                              setReminderTiming(opt.value);
+                              if (isChosen) {
+                                // Keep at least one chosen or allow deselect
+                                const filtered = reminderTimings.filter((t) => t !== opt.value);
+                                setReminderTimings(filtered.length > 0 ? filtered : [opt.value]);
+                              } else {
+                                setReminderTimings([...reminderTimings, opt.value]);
+                              }
                             }}
                           >
                             <Ionicons
-                              name={isChosen ? 'alarm' : 'time-outline'}
-                              size={13}
+                              name={isChosen ? 'checkbox' : 'square-outline'}
+                              size={14}
                               color={isChosen ? '#FFFFFF' : Theme.colors.textDark}
-                              style={{ marginRight: 4 }}
+                              style={{ marginRight: 5 }}
                             />
                             <Text style={[styles.timingChipText, isChosen && styles.timingChipTextActive]}>
                               {opt.label}
@@ -731,6 +744,25 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                         );
                       })}
                     </ScrollView>
+
+                    {/* Computed trigger times preview based on delivery date */}
+                    <View style={styles.reminderSchedulePreview}>
+                      <Ionicons name="time-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                      <Text style={styles.reminderScheduleText}>
+                        Alerts scheduled at:{' '}
+                        {reminderTimings
+                          .map((t) => {
+                            const offset = NotificationService.getTimingOffsetMs(t);
+                            const trigger = new Date(deliveryDate.getTime() - offset);
+                            return trigger.toLocaleTimeString(undefined, {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            });
+                          })
+                          .join(', ')}
+                      </Text>
+                    </View>
 
                     {/* Direct WhatsApp Test / Send Option */}
                     <TouchableOpacity
@@ -1492,6 +1524,21 @@ const styles = StyleSheet.create({
   },
   timingChipTextActive: {
     color: '#FFFFFF',
+  },
+  reminderSchedulePreview: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.cream,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginTop: 8,
+  },
+  reminderScheduleText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.deepRose,
+    flex: 1,
   },
   directWhatsAppBtn: {
     flexDirection: 'row',

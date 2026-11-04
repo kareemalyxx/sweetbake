@@ -7,11 +7,12 @@ export interface InAppNotification {
   orderId: string;
   customerName: string;
   customerPhone?: string;
-  triggerTime: string; // ISO string when it should alert
+  triggerTime: string; // ISO string when it should alert (e.g. 1:45 PM for 2:00 PM delivery with 15_min)
   deliveryDate: string;
   fulfillmentType: string;
   location?: string;
   message: string;
+  timing: ReminderTiming;
   timingLabel: string;
   isRead: boolean;
   createdAt: string;
@@ -122,34 +123,56 @@ export const NotificationService = {
     }
   },
 
+  /**
+   * Schedule one or more order reminders based on order pickup/delivery time.
+   * Calculates the exact trigger timestamp by subtracting the offset:
+   * (e.g. delivery at 2:00 PM with '15_min' -> trigger at 1:45 PM).
+   */
   async scheduleOrderReminder(order: CakeOrder): Promise<void> {
     if (!order.reminderEnabled) {
       await this.cancelOrderReminder(order.id);
       return;
     }
 
-    const orderTime = new Date(order.deliveryDate).getTime();
-    const offset = this.getTimingOffsetMs(order.reminderTiming || '1_hour');
-    const triggerTimestamp = orderTime - offset;
-    const timingLabel = this.getTimingDisplay(order.reminderTiming || '1_hour');
+    // Determine the list of timings chosen (supports multiple)
+    let timingsToSchedule: ReminderTiming[] = [];
+    if (Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0) {
+      timingsToSchedule = order.reminderTimings;
+    } else if (order.reminderTiming) {
+      timingsToSchedule = [order.reminderTiming];
+    } else {
+      timingsToSchedule = ['1_hour'];
+    }
 
-    const notif: InAppNotification = {
-      id: `remind-${order.id}`,
-      orderId: order.id,
-      customerName: order.customerName,
-      customerPhone: order.customerPhone,
-      triggerTime: new Date(triggerTimestamp).toISOString(),
-      deliveryDate: order.deliveryDate,
-      fulfillmentType: order.fulfillmentType || 'Pickup',
-      location: order.location,
-      message: `${order.fulfillmentType || 'Pickup'} due for ${order.customerName} (${timingLabel})`,
-      timingLabel,
-      isRead: false,
-      createdAt: new Date().toISOString(),
-    };
+    const orderTime = new Date(order.deliveryDate).getTime();
+    const newNotifications: InAppNotification[] = [];
+
+    timingsToSchedule.forEach((timing) => {
+      const offsetMs = this.getTimingOffsetMs(timing);
+      // Precise timestamp calculation: e.g. 2:00 PM (14:00) - 15 min = 1:45 PM (13:45)
+      const triggerTimestamp = orderTime - offsetMs;
+      const timingLabel = this.getTimingDisplay(timing);
+
+      newNotifications.push({
+        id: `remind-${order.id}-${timing}`,
+        orderId: order.id,
+        customerName: order.customerName,
+        customerPhone: order.customerPhone,
+        triggerTime: new Date(triggerTimestamp).toISOString(),
+        deliveryDate: order.deliveryDate,
+        fulfillmentType: order.fulfillmentType || 'Pickup',
+        location: order.location,
+        message: `${order.fulfillmentType || 'Pickup'} due for ${order.customerName} (${timingLabel})`,
+        timing,
+        timingLabel,
+        isRead: false,
+        createdAt: new Date().toISOString(),
+      });
+    });
 
     const current = await this.getAllReminders();
-    const updated = [notif, ...current.filter((n) => n.orderId !== order.id)];
+    // Remove old reminders for this order and merge in the new multi-reminders
+    const updated = [...newNotifications, ...current.filter((n) => n.orderId !== order.id)];
     await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
   },
 

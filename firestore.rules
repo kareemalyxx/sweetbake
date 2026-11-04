@@ -126,10 +126,10 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       let allowed = [
-        'id', 'customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor',
+        'id', 'customerName', 'customerPhone', 'deliveryDate', 'cakeType', 'shape', 'flavor',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location', 'reminderEnabled',
-        'reminderTiming', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
+        'reminderTiming', 'reminderTimings', 'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
       let validFulfillment = ['Pickup', 'Delivery'];
@@ -154,8 +154,11 @@ service cloud.firestore {
         (!('expenses' in data) || (data.expenses is list && data.expenses.size() <= 50)) &&
         (!('fulfillmentType' in data) || data.fulfillmentType in validFulfillment) &&
         (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
+        (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&
+        (!('reminderTimings' in data) || (data.reminderTimings is list && data.reminderTimings.size() <= 10)) &&
+        (!('notificationTimestamps' in data) || (data.notificationTimestamps is list && data.notificationTimestamps.size() <= 10)) &&
         (!('addons' in data) || (data.addons is map && data.addons.size() <= 30) || (data.addons is list && data.addons.size() <= 30)) &&
         (!('referenceImages' in data) || (data.referenceImages is list && data.referenceImages.size() <= 10)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&

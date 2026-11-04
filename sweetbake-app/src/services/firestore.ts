@@ -15,7 +15,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { CakeOrder, GeneralRequirement, OrderExpense } from '../types';
+import { CakeOrder, GeneralRequirement, OrderExpense, ReminderTiming } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ORDERS_CACHE_KEY = '@sweetbake_orders_cache_v1';
@@ -82,6 +82,9 @@ export const FirestoreService = {
             deliveryDate: toIsoDate(raw.deliveryDate),
             createdAt: toIsoDate(raw.createdAt),
             updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+            notificationTimestamps: Array.isArray(raw.notificationTimestamps)
+              ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
+              : undefined,
             expenses: Array.isArray(raw.expenses)
               ? raw.expenses.map((e: any) => ({
                   ...e,
@@ -124,6 +127,9 @@ export const FirestoreService = {
           deliveryDate: toIsoDate(raw.deliveryDate),
           createdAt: toIsoDate(raw.createdAt),
           updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          notificationTimestamps: Array.isArray(raw.notificationTimestamps)
+            ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
+            : undefined,
           expenses: Array.isArray(raw.expenses)
             ? raw.expenses.map((e: any) => ({
                 ...e,
@@ -149,11 +155,34 @@ export const FirestoreService = {
    */
   async saveOrder(order: CakeOrder): Promise<void> {
     const orderRef = doc(db, 'orders', order.id);
+
+    // Calculate notification timestamps based on deliveryDate and chosen timings
+    const deliveryMs = new Date(order.deliveryDate).getTime();
+    const timings: ReminderTiming[] = Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0
+      ? order.reminderTimings
+      : (order.reminderTiming ? [order.reminderTiming] : []);
+
+    const offsetMap: Record<ReminderTiming, number> = {
+      '15_min': 15 * 60 * 1000,
+      '1_hour': 60 * 60 * 1000,
+      '2_hours': 2 * 60 * 60 * 1000,
+      '1_day': 24 * 60 * 60 * 1000,
+      'on_time': 0,
+    };
+
+    // Stored as native Firebase Timestamps: deliveryDate - offset
+    const notificationTimestamps = timings.map((timing) => {
+      const triggerMs = deliveryMs - (offsetMap[timing] ?? 0);
+      return Timestamp.fromMillis(triggerMs);
+    });
+
     const dataToSave = {
       ...order,
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
+      reminderTimings: timings,
+      notificationTimestamps,
       expenses: Array.isArray(order.expenses)
         ? order.expenses.map((e) => ({
             ...e,
