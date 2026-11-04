@@ -151,6 +151,16 @@ export default function App() {
         FirestoreService.saveOrder(orderToSave).catch((e) =>
           console.warn('Failed to sync order to Firestore:', e)
         );
+
+        // Also save each individual expense to the dedicated /expenses collection
+        if (Array.isArray(orderToSave.expenses)) {
+          orderToSave.expenses.forEach((exp) => {
+            FirestoreService.saveExpense({
+              ...exp,
+              orderId: targetOrderId,
+            }).catch(() => {});
+          });
+        }
       }
     }
 
@@ -306,10 +316,16 @@ export default function App() {
     if (newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0) {
       const expenseEntry: OrderExpense = {
         id: `exp-chk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        orderId: target.orderId || undefined,
         amount: expenseAmount,
         notes: target.title,
         date: nowIso,
       };
+
+      // Always persist to the dedicated root `/expenses` collection
+      FirestoreService.saveExpense(expenseEntry).catch((e) =>
+        console.warn('Failed to save expense to /expenses:', e)
+      );
 
       if (target.orderId) {
         // Link directly into the corresponding cake commission order
@@ -834,25 +850,58 @@ export default function App() {
                         </View>
                       )}
 
-                      {!notif.isRead && (
+                      <View style={styles.notifActionRow}>
+                        {/* WhatsApp Notification Button */}
                         <TouchableOpacity
-                          style={[
-                            styles.dismissBtn,
-                            { backgroundColor: Theme.colors.deepRose },
-                          ]}
-                          onPress={() => handleDismissNotification(notif.id)}
+                          style={styles.whatsAppBtn}
+                          onPress={() => {
+                            triggerHaptic.selection();
+                            const matchedOrder = orders.find((o) => o.id === notif.orderId);
+                            NotificationService.sendWhatsAppNotification({
+                              customerName: notif.customerName,
+                              customerPhone: notif.customerPhone || matchedOrder?.customerPhone,
+                              deliveryDate: notif.deliveryDate,
+                              cakeType: matchedOrder?.cakeType,
+                              shape: matchedOrder?.shape,
+                              flavor: matchedOrder?.flavor,
+                              fulfillmentType: notif.fulfillmentType,
+                              location: notif.location,
+                              quotedPrice: matchedOrder?.quotedPrice,
+                              remainingPayment: matchedOrder?.remainingPayment,
+                            });
+                          }}
                         >
                           <Ionicons
-                            name="checkmark-done"
-                            size={14}
+                            name="logo-whatsapp"
+                            size={15}
                             color="#FFFFFF"
-                            style={{ marginRight: 4 }}
+                            style={{ marginRight: 5 }}
                           />
-                          <Text style={styles.dismissBtnText}>
-                            Dismiss Reminder
+                          <Text style={styles.whatsAppBtnText}>
+                            WhatsApp Alert
                           </Text>
                         </TouchableOpacity>
-                      )}
+
+                        {!notif.isRead && (
+                          <TouchableOpacity
+                            style={[
+                              styles.dismissBtn,
+                              { backgroundColor: Theme.colors.deepRose },
+                            ]}
+                            onPress={() => handleDismissNotification(notif.id)}
+                          >
+                            <Ionicons
+                              name="checkmark-done"
+                              size={14}
+                              color="#FFFFFF"
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={styles.dismissBtnText}>
+                              Dismiss
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   );
                 })}
@@ -1071,13 +1120,33 @@ const styles = StyleSheet.create({
   notifLocationText: {
     fontSize: 11,
   },
+  notifActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 10,
+  },
+  whatsAppBtn: {
+    flex: 1.2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25D366',
+    borderRadius: 10,
+    paddingVertical: 9,
+  },
+  whatsAppBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   dismissBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 10,
-    paddingVertical: 8,
-    marginTop: 10,
+    paddingVertical: 9,
   },
   dismissBtnText: {
     color: '#FFFFFF',

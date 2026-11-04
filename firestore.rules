@@ -50,6 +50,18 @@ service cloud.firestore {
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
     //
+    // Collection: /expenses/{expenseId}
+    // Document ID: Auto-generated or UUID string
+    // Fields:
+    //   - id: string (optional, 0..100 chars, immutable)
+    //   - orderId: string (optional, 0..100 chars)
+    //   - amount: number (required, >= 0, <= 1000000)
+    //   - notes: string (optional, 0..500 chars)
+    //   - date: timestamp or string (required, valid timestamp or ISO-8601 string)
+    //   - createdAt: timestamp or string (required on create, immutable)
+    //   - updatedAt: timestamp or string (optional)
+    //   - userId: string (optional, 0..100 chars)
+    //
     // ===============================================================
 
     // ===============================================================
@@ -172,8 +184,26 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Domain Validators: Expenses
+    // ===============================================================
+
+    function isValidExpense(data) {
+      let allowed = ['id', 'orderId', 'amount', 'notes', 'date', 'createdAt', 'updatedAt', 'userId'];
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['amount', 'date', 'createdAt']) &&
+        data.amount is number && data.amount >= 0 && data.amount <= 1000000 &&
+        isValidTimestampOrIsoDate(data.date) &&
+        isValidTimestampOrIsoDate(data.createdAt) &&
+        (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
+        (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('userId' in data) || (data.userId is string && data.userId.size() <= 100));
+    }
+
+    // ===============================================================
     // Security Rules Match Blocks (Single Bakery Kitchen Architecture)
-    // Direct root collections: /orders and /requirements
+    // Direct root collections: /orders, /requirements, and /expenses
     // ===============================================================
 
     // Root-level orders collection for the bakery
@@ -190,6 +220,15 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidRequirement(request.resource.data);
       allow update: if isValidRequirement(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt', 'id']);
+      allow delete: if true;
+    }
+
+    // Root-level expenses collection for the bakery
+    match /expenses/{expenseId} {
+      allow read: if true;
+      allow create: if isValidExpense(request.resource.data);
+      allow update: if isValidExpense(request.resource.data) &&
         areImmutableFieldsUnchanged(['createdAt', 'id']);
       allow delete: if true;
     }

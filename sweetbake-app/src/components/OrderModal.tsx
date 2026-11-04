@@ -20,6 +20,7 @@ import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming, OrderExpense }
 import { Theme } from '../theme';
 import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
 import { StorageService } from '../services/storage';
+import { NotificationService } from '../services/notifications';
 import { triggerHaptic } from '../services/haptics';
 
 interface OrderModalProps {
@@ -88,6 +89,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [availableShapes, setAvailableShapes] = useState<string[]>(CAKE_SHAPES);
   const [availableAddons, setAvailableAddons] = useState<string[]>(CAKE_ADDONS);
 
+  // Client Phone Number (for WhatsApp notification)
+  const [customerPhone, setCustomerPhone] = useState('');
+
   // Add new item prompt states
   const [newFlavorInput, setNewFlavorInput] = useState('');
   const [showAddFlavor, setShowAddFlavor] = useState(false);
@@ -125,6 +129,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   useEffect(() => {
     if (orderToEdit) {
       setCustomerName(orderToEdit.customerName);
+      setCustomerPhone(orderToEdit.customerPhone || '');
       setCakeType(orderToEdit.cakeType);
       setShape(orderToEdit.shape);
       setFlavor(orderToEdit.flavor);
@@ -149,6 +154,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
     } else {
       setCustomerName('');
+      setCustomerPhone('');
       setCakeType(availableCakeTypes[0] || CAKE_TYPES[0]);
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
@@ -403,6 +409,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     onSave({
       id: orderToEdit ? orderToEdit.id : undefined,
       customerName: customerName.trim(),
+      customerPhone: customerPhone.trim(),
       cakeType,
       shape,
       flavor,
@@ -460,7 +467,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {/* Section 1: Customer Details */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Client & Name</Text>
+              <Text style={styles.sectionTitle}>Client Details</Text>
               <TextInput
                 style={styles.input}
                 placeholder="Customer Full Name (e.g. Sophia Miller)"
@@ -468,6 +475,18 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 value={customerName}
                 onChangeText={setCustomerName}
               />
+
+              <View style={styles.phoneInputRow}>
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" style={{ marginRight: 8 }} />
+                <TextInput
+                  style={styles.phoneInput}
+                  placeholder="WhatsApp / Phone number (e.g. +1 555 123 4567)"
+                  placeholderTextColor={Theme.colors.textSecondary}
+                  keyboardType="phone-pad"
+                  value={customerPhone}
+                  onChangeText={setCustomerPhone}
+                />
+              </View>
             </View>
 
             {/* Section 2: Fulfillment & Location */}
@@ -712,6 +731,29 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                         );
                       })}
                     </ScrollView>
+
+                    {/* Direct WhatsApp Test / Send Option */}
+                    <TouchableOpacity
+                      style={styles.directWhatsAppBtn}
+                      onPress={() => {
+                        triggerHaptic.medium();
+                        NotificationService.sendWhatsAppNotification({
+                          customerName: customerName.trim() || 'Valued Customer',
+                          customerPhone: customerPhone.trim(),
+                          deliveryDate: deliveryDate.toISOString(),
+                          cakeType,
+                          shape,
+                          flavor,
+                          fulfillmentType,
+                          location: location.trim(),
+                          quotedPrice: totalVal,
+                          remainingPayment: remainingVal,
+                        });
+                      }}
+                    >
+                      <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.directWhatsAppText}>Send Order Alert via WhatsApp Now</Text>
+                    </TouchableOpacity>
                   </View>
                 )}
               </View>
@@ -1262,6 +1304,22 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Theme.colors.textDark,
   },
+  phoneInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+  phoneInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Theme.colors.textDark,
+  },
   textArea: {
     height: 80,
     textAlignVertical: 'top',
@@ -1434,6 +1492,21 @@ const styles = StyleSheet.create({
   },
   timingChipTextActive: {
     color: '#FFFFFF',
+  },
+  directWhatsAppBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#25D366',
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginTop: 12,
+  },
+  directWhatsAppText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
   titleWithAction: {
     flexDirection: 'row',

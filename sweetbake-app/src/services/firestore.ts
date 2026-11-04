@@ -15,11 +15,12 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { CakeOrder, GeneralRequirement } from '../types';
+import { CakeOrder, GeneralRequirement, OrderExpense } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ORDERS_CACHE_KEY = '@sweetbake_orders_cache_v1';
 const REQS_CACHE_KEY = '@sweetbake_reqs_cache_v1';
+const EXPENSES_CACHE_KEY = '@sweetbake_expenses_cache_v1';
 
 /**
  * Helper to normalize Firebase Timestamp or ISO string to ISO string for JS components
@@ -275,6 +276,174 @@ export const FirestoreService = {
   async deleteRequirement(reqId: string): Promise<void> {
     const reqRef = doc(db, 'requirements', reqId);
     await deleteDoc(reqRef);
+  },
+
+  /**
+   * =========================================================================
+   * Dedicated `/expenses` Collection (with orderId linking & cursor pagination)
+   * =========================================================================
+   */
+
+  /**
+   * Listen to real-time updates for expenses with pagination and optional orderId filtering
+   */
+  subscribeToExpenses(
+    onSuccess: (expenses: OrderExpense[]) => void,
+    onError?: (err: Error) => void,
+    options?: {
+      orderId?: string;
+      pageSize?: number;
+    }
+  ): () => void {
+    const pageSize = options?.pageSize ?? 25;
+    const expensesCol = collection(db, 'expenses');
+
+    let q;
+    if (options?.orderId) {
+      // Query all expenses that have orderId of order
+      q = query(
+        expensesCol,
+        where('orderId', '==', options.orderId),
+        limit(pageSize)
+      );
+    } else {
+      // General expenses ordered by date descending
+      q = query(
+        expensesCol,
+        orderBy('date', 'desc'),
+        limit(pageSize)
+      );
+    }
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const expenses: OrderExpense[] = [];
+        snapshot.forEach((docSnap) => {
+          const raw = docSnap.data();
+          expenses.push({
+            id: docSnap.id,
+            orderId: raw.orderId || undefined,
+            amount: typeof raw.amount === 'number' ? raw.amount : parseFloat(raw.amount || 0),
+            notes: raw.notes || '',
+            date: toIsoDate(raw.date),
+            createdAt: raw.createdAt ? toIsoDate(raw.createdAt) : undefined,
+          });
+        });
+
+        // Ensure chronological sort in memory
+        expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+        if (!options?.orderId) {
+          AsyncStorage.setItem(EXPENSES_CACHE_KEY, JSON.stringify(expenses)).catch(() => {});
+        }
+        onSuccess(expenses);
+      },
+      (error) => {
+        console.warn('Error listening to expenses:', error);
+        if (onError) onError(new Error(error.message));
+      }
+    );
+  },
+
+  /**
+   * Fetch paginated expenses once from Firestore (sorted by date or filtered by orderId)
+   */
+  async getExpenses(options?: {
+    orderId?: string;
+    pageSize?: number;
+    lastDoc?: QueryDocumentSnapshot<DocumentData>;
+  }): Promise<{ expenses: OrderExpense[]; lastVisible?: QueryDocumentSnapshot<DocumentData> }> {
+    try {
+      const pageSize = options?.pageSize ?? 25;
+      const expensesCol = collection(db, 'expenses');
+
+      let q;
+      if (options?.orderId) {
+        // Query specifically for all expenses that have orderId of order
+        q = query(
+          expensesCol,
+          where('orderId', '==', options.orderId),
+          limit(pageSize)
+        );
+        if (options?.lastDoc) {
+          q = query(
+            expensesCol,
+            where('orderId', '==', options.orderId),
+            startAfter(options.lastDoc),
+            limit(pageSize)
+          );
+        }
+      } else {
+        // Sort by date descending with cursor pagination
+        q = query(
+          expensesCol,
+          orderBy('date', 'desc'),
+          limit(pageSize)
+        );
+        if (options?.lastDoc) {
+          q = query(
+            expensesCol,
+            orderBy('date', 'desc'),
+            startAfter(options.lastDoc),
+            limit(pageSize)
+          );
+        }
+      }
+
+      const snapshot = await getDocs(q);
+      const expenses: OrderExpense[] = [];
+      snapshot.forEach((docSnap) => {
+        const raw = docSnap.data();
+        expenses.push({
+          id: docSnap.id,
+          orderId: raw.orderId || undefined,
+          amount: typeof raw.amount === 'number' ? raw.amount : parseFloat(raw.amount || 0),
+          notes: raw.notes || '',
+          date: toIsoDate(raw.date),
+          createdAt: raw.createdAt ? toIsoDate(raw.createdAt) : undefined,
+        });
+      });
+
+      // In-memory sort by date descending
+      expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+      if (!options?.lastDoc && !options?.orderId) {
+        AsyncStorage.setItem(EXPENSES_CACHE_KEY, JSON.stringify(expenses)).catch(() => {});
+      }
+      return { expenses, lastVisible };
+    } catch (err) {
+      console.warn('Failed to fetch expenses from Firestore, using cache:', err);
+      const cached = await AsyncStorage.getItem(EXPENSES_CACHE_KEY);
+      return { expenses: cached ? JSON.parse(cached) : [] };
+    }
+  },
+
+  /**
+   * Save an expense item to `/expenses` with native Firebase Timestamp dates
+   */
+  async saveExpense(expense: OrderExpense): Promise<void> {
+    const expenseRef = doc(db, 'expenses', expense.id);
+    const dataToSave = {
+      ...expense,
+      id: expense.id,
+      amount: typeof expense.amount === 'number' ? expense.amount : parseFloat(expense.amount as any || 0),
+      notes: expense.notes || '',
+      date: toFirebaseTimestamp(expense.date),
+      createdAt: expense.createdAt ? toFirebaseTimestamp(expense.createdAt) : Timestamp.now(),
+      updatedAt: Timestamp.now(),
+      ...(expense.orderId ? { orderId: expense.orderId } : {}),
+    };
+    await setDoc(expenseRef, dataToSave, { merge: true });
+  },
+
+  /**
+   * Delete an expense item from `/expenses`
+   */
+  async deleteExpense(expenseId: string): Promise<void> {
+    const expenseRef = doc(db, 'expenses', expenseId);
+    await deleteDoc(expenseRef);
   },
 };
 

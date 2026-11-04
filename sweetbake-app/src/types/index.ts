@@ -6,14 +6,17 @@ export type ReminderTiming = 'on_time' | '15_min' | '1_hour' | '2_hours' | '1_da
 
 export interface OrderExpense {
   id: string;
+  orderId?: string; // Linked order ID (optional for general bakery expenses, populated when linked to an order)
   amount: number; // Amount paid
   notes: string; // Description/purpose (e.g., 'Specialty fondant', 'Edible flowers')
   date: string; // When expense was paid (ISO string)
+  createdAt?: string; // ISO string creation timestamp
 }
 
 export interface CakeOrder {
   id: string;
   customerName: string;
+  customerPhone?: string; // Client phone number for WhatsApp reminders & updates
   deliveryDate: string; // ISO String
   cakeType: string;
   shape: string;

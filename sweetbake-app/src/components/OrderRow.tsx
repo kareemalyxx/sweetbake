@@ -4,6 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder } from '../types';
 import { Theme } from '../theme';
 import { StatusPill } from './StatusPill';
+import { NotificationService } from '../services/notifications';
+import { triggerHaptic } from '../services/haptics';
 
 interface OrderRowProps {
   order: CakeOrder;
@@ -173,13 +175,38 @@ export const OrderRow: React.FC<OrderRowProps> = ({
             </TouchableOpacity>
           )}
 
-          <TouchableOpacity
-            style={styles.deleteButton}
-            onPress={onDelete}
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-          >
-            <Ionicons name="trash-outline" size={18} color={Theme.colors.textSecondary} />
-          </TouchableOpacity>
+          <View style={styles.iconActionRow}>
+            {/* Quick WhatsApp Reminder Trigger */}
+            <TouchableOpacity
+              style={styles.whatsAppIconBtn}
+              onPress={() => {
+                triggerHaptic.medium();
+                NotificationService.sendWhatsAppNotification({
+                  customerName: order.customerName,
+                  customerPhone: order.customerPhone,
+                  deliveryDate: order.deliveryDate,
+                  cakeType: order.cakeType,
+                  shape: order.shape,
+                  flavor: order.flavor,
+                  fulfillmentType: order.fulfillmentType,
+                  location: order.location,
+                  quotedPrice: order.quotedPrice,
+                  remainingPayment: remaining,
+                });
+              }}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Ionicons name="logo-whatsapp" size={19} color="#25D366" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deleteButton}
+              onPress={onDelete}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              <Ionicons name="trash-outline" size={18} color={Theme.colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -379,6 +406,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  iconActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  whatsAppIconBtn: {
+    padding: 6,
   },
   deleteButton: {
     padding: 6,
