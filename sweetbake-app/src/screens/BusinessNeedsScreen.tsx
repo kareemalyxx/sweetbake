@@ -500,7 +500,9 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         <TextInput
           style={styles.textInput}
           placeholder={
-            selectedCategory === 'All'
+            viewMode === 'ByCake' && selectedCakeOrderId !== 'All'
+              ? `Add requirement for ${cakeOptions.find((c) => c.orderId === selectedCakeOrderId)?.customerName || 'this cake'}...`
+              : selectedCategory === 'All'
               ? 'Add new requirement (defaults to Add-ons)...'
               : `Add new ${selectedCategory === 'Add-ons' ? 'Add-on requirement' : selectedCategory.toLowerCase()}...`
           }
@@ -524,7 +526,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         </Text>
         {completed.length > 0 && (
           <TouchableOpacity
-            onPress={() => onClearCompleted(selectedCategory === 'All' ? undefined : selectedCategory)}
+            onPress={() => onClearCompleted(viewMode === 'Category' && selectedCategory !== 'All' ? selectedCategory : undefined)}
           >
             <Text style={styles.clearDoneText}>Clear done</Text>
           </TouchableOpacity>
@@ -539,9 +541,17 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
-            title={selectedCategory === 'All' ? 'No To-Dos' : `No ${selectedCategory} To-Dos`}
+            title={
+              viewMode === 'ByCake' && selectedCakeOrderId !== 'All'
+                ? `No To-Dos for this Cake`
+                : selectedCategory === 'All'
+                ? 'No To-Dos'
+                : `No ${selectedCategory} To-Dos`
+            }
             subtitle={
-              selectedCategory === 'All'
+              viewMode === 'ByCake' && selectedCakeOrderId !== 'All'
+                ? 'All specific requirements for this cake order have been completed!'
+                : selectedCategory === 'All'
                 ? 'All bakery requirements and commission add-ons are prepped and completed!'
                 : `All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`
             }

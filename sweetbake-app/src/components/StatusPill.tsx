@@ -19,6 +19,8 @@ export const StatusPill: React.FC<StatusPillProps> = ({ status }) => {
         return { bg: Theme.colors.status.decorating, text: Theme.colors.status.decoratingDark, icon: 'sparkles' as const };
       case 'Delivered':
         return { bg: Theme.colors.status.delivered, text: Theme.colors.status.deliveredDark, icon: 'checkmark-circle' as const };
+      default:
+        return { bg: Theme.colors.status.pending, text: Theme.colors.status.pendingDark, icon: 'time' as const };
     }
   };
 
