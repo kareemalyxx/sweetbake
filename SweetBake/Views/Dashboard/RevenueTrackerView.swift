@@ -1,19 +1,20 @@
-//
-//  RevenueTrackerView.swift
-//  SweetBake
-//
-
 import SwiftUI
 
-struct RevenueTrackerView: View {
-    let orders: [Order]
+// MARK: - Premium Native iOS Revenue Tracker Card (HIG & Accessibility Compliant)
+public struct RevenueTrackerView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
+    public let orders: [Order]
+    
+    public init(orders: [Order]) {
+        self.orders = orders
+    }
     
     private var currentMonthOrders: [Order] {
         let calendar = Calendar.current
         let now = Date()
-        return orders.filter {
-            calendar.isDate($0.deliveryDate, equalTo: now, toGranularity: .month) &&
-            calendar.isDate($0.deliveryDate, equalTo: now, toGranularity: .year)
+        return orders.filter { order in
+            calendar.isDate(order.deliveryDate, equalTo: now, toGranularity: .month)
         }
     }
     
@@ -33,119 +34,128 @@ struct RevenueTrackerView: View {
         pendingRevenue + completedRevenue
     }
     
-    private var monthName: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MMMM"
-        return formatter.string(from: Date())
+    private var fulfilledPercent: Int {
+        guard totalRevenue > 0 else { return 0 }
+        return Int((completedRevenue / totalRevenue) * 100)
     }
     
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
+    public var body: some View {
+        VStack(spacing: 14) {
+            // Header Row
+            HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
-                            .foregroundColor(Theme.deepRose)
-                        Text("\(monthName) Revenue")
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundColor(Theme.textDark)
+                            .symbolRenderingMode(.hierarchical)
+                            .foregroundColor(Theme.Colors.deepRose)
+                            .font(.headline)
+                        
+                        Text("\(Date().formatted(.dateTime.month(.wide))) Revenue")
+                            .font(.headline)
+                            .foregroundColor(Theme.Colors.textDark)
                     }
-                    Text("Total: \(totalRevenue, format: .currency(code: "USD"))")
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(Theme.textSecondary)
+                    
+                    Text("Total: $\(totalRevenue, specifier: "%.2f")")
+                        .font(.subheadline)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
+                
                 Spacer()
                 
-                // Monthly progress pill
                 if totalRevenue > 0 {
-                    let percent = Int((completedRevenue / totalRevenue) * 100)
-                    Text("\(percent)% Fulfilled")
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .padding(.horizontal, 8)
+                    Text("\(fulfilledPercent)% Fulfilled")
+                        .font(.caption.weight(.bold))
+                        .padding(.horizontal, 10)
                         .padding(.vertical, 4)
-                        .background(Theme.lavenderLight)
-                        .foregroundColor(Theme.softLilac)
+                        .background(Theme.Colors.lavenderLight)
+                        .foregroundColor(Theme.Colors.softLilac)
                         .clipShape(Capsule())
                 }
             }
             
-            // Progress Bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 8)
-                        .fill(Theme.lavenderLight.opacity(0.6))
-                        .frame(height: 8)
-                    
-                    if totalRevenue > 0 {
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(
-                                LinearGradient(
-                                    colors: [Theme.deliveredGreenDark, Theme.deliveredGreen],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: geo.size.width * CGFloat(completedRevenue / totalRevenue), height: 8)
-                            .animation(.spring(response: 0.5), value: completedRevenue)
-                    }
-                }
-            }
-            .frame(height: 8)
+            // Native Semantic Progress View with Standard HIG Styling
+            ProgressView(value: min(1.0, totalRevenue > 0 ? (completedRevenue / totalRevenue) : 0))
+                .tint(Theme.Colors.deepRose)
+                .background(Color(UIColor.tertiarySystemFill))
+                .clipShape(Capsule())
+                .scaleEffect(x: 1, y: 1.6, anchor: .center)
+                .accessibilityLabel("Monthly fulfillment progress")
+                .accessibilityValue("\(fulfilledPercent) percent")
             
-            // Financial breakdown cards
+            // Sub-metrics Split Cards
             HStack(spacing: 12) {
-                // Pending card
+                // Pipeline Metric
                 HStack(spacing: 10) {
-                    Circle()
-                        .fill(Theme.pendingOrange)
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Image(systemName: "hourglass")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(Theme.pendingOrangeDark)
-                        )
+                    ZStack {
+                        Circle()
+                            .fill(Theme.Colors.Status.pending)
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "hourglass")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.footnote)
+                            .foregroundColor(Theme.Colors.Status.pendingDark)
+                    }
+                    .accessibilityHidden(true)
                     
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: 1) {
                         Text("In Pipeline")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(Theme.textSecondary)
-                        Text(pendingRevenue, format: .currency(code: "USD"))
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundColor(Theme.textDark)
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(Color(UIColor.secondaryLabel))
+                        Text("$\(pendingRevenue, specifier: "%.2f")")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(Theme.Colors.textDark)
                     }
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .background(Color.white.opacity(0.8))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.Colors.warmIvory)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("In pipeline revenue: $\(String(format: "%.2f", pendingRevenue))")
                 
-                // Completed card
+                // Delivered Metric
                 HStack(spacing: 10) {
-                    Circle()
-                        .fill(Theme.deliveredGreen)
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(Theme.deliveredGreenDark)
-                        )
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Delivered")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(Theme.textSecondary)
-                        Text(completedRevenue, format: .currency(code: "USD"))
-                            .font(.system(size: 15, weight: .bold, design: .rounded))
-                            .foregroundColor(Theme.textDark)
+                    ZStack {
+                        Circle()
+                            .fill(Theme.Colors.Status.delivered)
+                            .frame(width: 34, height: 34)
+                        Image(systemName: "checkmark")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.footnote)
+                            .foregroundColor(Theme.Colors.Status.deliveredDark)
                     }
+                    .accessibilityHidden(true)
+                    
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Delivered")
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(Color(UIColor.secondaryLabel))
+                        Text("$\(completedRevenue, specifier: "%.2f")")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(Theme.Colors.textDark)
+                    }
+                    Spacer()
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(10)
-                .background(Color.white.opacity(0.8))
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Theme.Colors.warmIvory)
+                )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Delivered revenue: $\(String(format: "%.2f", completedRevenue))")
             }
         }
-        .sweetCardStyle()
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Theme.Colors.secondaryBackground)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.Colors.border, lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
     }
 }
-

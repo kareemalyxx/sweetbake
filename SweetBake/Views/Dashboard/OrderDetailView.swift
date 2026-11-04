@@ -9,6 +9,7 @@ import SwiftData
 struct OrderDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @Bindable var order: Order
     @State private var showingEditSheet = false
@@ -17,34 +18,45 @@ struct OrderDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header Hero
-                VStack(alignment: .leading, spacing: 10) {
+                // Header Hero Card
+                VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         StatusPillView(status: order.status)
                         Spacer()
                         Text(order.quotedPrice, format: .currency(code: "USD"))
-                            .font(.system(size: 24, weight: .bold, design: .rounded))
+                            .font(.title2.weight(.bold))
                             .foregroundColor(Theme.textMauve)
                     }
                     
                     Text(order.customerName)
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .font(.title.weight(.bold))
                         .foregroundColor(Theme.textDark)
                     
                     HStack(spacing: 8) {
                         Image(systemName: "calendar.badge.clock")
+                            .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.deepRose)
+                            .font(.subheadline)
                         Text(order.deliveryDate.formatted(date: .complete, time: .shortened))
-                            .font(.system(size: 15, weight: .medium, design: .rounded))
-                            .foregroundColor(Theme.textDark)
+                            .font(.subheadline.weight(.medium))
+                            .foregroundColor(Color(UIColor.secondaryLabel))
                     }
                 }
-                .sweetCardStyle()
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(UIColor.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Theme.pastelRose.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 
                 // Status Advancement Control
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 12) {
                     Text("Change Status")
-                        .font(.system(size: 14, weight: .bold, design: .rounded))
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(Theme.textMauve)
                     
                     Picker("Status", selection: $order.status) {
@@ -58,12 +70,21 @@ struct OrderDetailView: View {
                         try? modelContext.save()
                     }
                 }
-                .sweetCardStyle()
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(UIColor.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Theme.pastelRose.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 
                 // Cake Attributes
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 14) {
                     Text("Cake Specifications")
-                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                        .font(.headline.weight(.bold))
                         .foregroundColor(Theme.textDark)
                     
                     Divider()
@@ -72,40 +93,62 @@ struct OrderDetailView: View {
                     DetailRow(title: "Shape", value: order.shape, icon: "square.on.circle")
                     DetailRow(title: "Flavor & Filling", value: order.flavor, icon: "heart.circle")
                 }
-                .sweetCardStyle()
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(UIColor.secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(Theme.pastelRose.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 
                 // Custom Requirements
                 if !order.customRequirements.isEmpty {
                     VStack(alignment: .leading, spacing: 10) {
-                        HStack(spacing: 6) {
+                        HStack(spacing: 8) {
                             Image(systemName: "note.text")
+                                .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
+                                .font(.headline)
                             Text("Custom Requirements & Notes")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .font(.headline.weight(.bold))
                                 .foregroundColor(Theme.textDark)
                         }
                         
                         Text(order.customRequirements)
-                            .font(.system(size: 14, design: .rounded))
+                            .font(.subheadline)
                             .foregroundColor(Theme.textDark)
                             .lineSpacing(4)
                     }
-                    .sweetCardStyle()
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Theme.pastelRose.opacity(0.35), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 }
                 
                 // Reference Photos
                 if !order.referenceImages.isEmpty {
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 14) {
                         HStack {
                             Image(systemName: "photo.on.rectangle.angled")
+                                .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
+                                .font(.headline)
                             Text("Reference Photos & Sketches")
-                                .font(.system(size: 15, weight: .bold, design: .rounded))
+                                .font(.headline.weight(.bold))
                                 .foregroundColor(Theme.textDark)
                             Spacer()
                             Text("\(order.referenceImages.count) attached")
                                 .font(.caption)
-                                .foregroundColor(Theme.textSecondary)
+                                .foregroundColor(Color(UIColor.secondaryLabel))
                         }
                         
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -116,22 +159,31 @@ struct OrderDetailView: View {
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 140, height: 140)
-                                            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                                            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                                             .overlay(
-                                                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                                                    .stroke(Theme.pastelRose, lineWidth: 1)
+                                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                                    .stroke(Theme.pastelRose.opacity(0.5), lineWidth: 1)
                                             )
                                     }
                                 }
                             }
                         }
                     }
-                    .sweetCardStyle()
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .fill(Color(UIColor.secondarySystemGroupedBackground))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .stroke(Theme.pastelRose.opacity(0.35), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.04), radius: 6, y: 3)
                 }
             }
             .padding(16)
         }
-        .background(Theme.cream.ignoresSafeArea())
+        .background(Color(UIColor.systemGroupedBackground).ignoresSafeArea())
         .navigationTitle("Order Details")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -151,8 +203,11 @@ struct OrderDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .foregroundColor(Theme.roseGold)
-                        .font(.system(size: 18))
+                        .font(.title3)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Order options")
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -180,21 +235,25 @@ private struct DetailRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .font(.system(size: 14))
+                .symbolRenderingMode(.hierarchical)
+                .font(.footnote)
                 .foregroundColor(Theme.softLilac)
-                .frame(width: 22)
+                .frame(width: 24)
+                .accessibilityHidden(true)
             
             Text(title)
-                .font(.system(size: 14, weight: .medium, design: .rounded))
-                .foregroundColor(Theme.textSecondary)
+                .font(.subheadline)
+                .foregroundColor(Color(UIColor.secondaryLabel))
             
             Spacer()
             
             Text(value)
-                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .font(.subheadline.weight(.semibold))
                 .foregroundColor(Theme.textDark)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 

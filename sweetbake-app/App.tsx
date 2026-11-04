@@ -12,11 +12,11 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus } from './src/types';
 import { StorageService } from './src/services/storage';
-import { FirestoreService } from './src/services/firestore';
+import { NotificationService, InAppNotification } from './src/services/notifications';
 import { AuthService } from './src/services/auth';
+import { FirestoreService } from './src/services/firestore';
 import { AuthModal } from './src/components/AuthModal';
 import { User } from 'firebase/auth';
-import { NotificationService, InAppNotification } from './src/services/notifications';
 import { Theme } from './src/theme';
 import { triggerHaptic } from './src/services/haptics';
 
@@ -34,28 +34,22 @@ export default function App() {
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [allReminders, setAllReminders] = useState<InAppNotification[]>([]);
-
-  // Firebase Auth & Cloud Sync
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   useEffect(() => {
-    // Listen to Firebase Auth state
-    const unsubscribeAuth = AuthService.subscribeToAuthChanges((user) => {
-      setCurrentUser(user);
-    });
-
-    return () => {
-      unsubscribeAuth();
-    };
+    const unsub = AuthService.subscribeToAuthChanges((u) => setCurrentUser(u));
+    return () => unsub();
   }, []);
+
+  // App re-render trigger for child components reading Theme directly
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     let unsubscribeOrders: (() => void) | undefined;
     let unsubscribeReqs: (() => void) | undefined;
 
     if (currentUser) {
-      // Real-time Firestore listeners for authenticated user
       unsubscribeOrders = FirestoreService.subscribeToOrders(currentUser.uid, (cloudOrders) => {
         setOrders(cloudOrders);
       });
@@ -157,27 +151,28 @@ export default function App() {
     }
 
     // Synchronize Add-ons with Checklist (Business Needs)
+    // Supports Map (Record<string, boolean>) and legacy array with deterministic unique IDs
     if (orderData.addons) {
       const clientName = orderData.customerName || 'Cake Order';
       let currentReqs = [...requirements];
 
-      // Handle both Map (Record<string, boolean>) and legacy array
       const addonEntries: [string, boolean][] = Array.isArray(orderData.addons)
         ? orderData.addons.map((a: string) => [a, false])
         : Object.entries(orderData.addons);
 
       if (addonEntries.length > 0) {
-        for (const [addon, isDone] of addonEntries) {
-          const itemTitle = `${addon} (for ${clientName})`;
-          // Check if already in requirements
+        addonEntries.forEach(([addon, isDone], idx) => {
+          const cleanName = addon.trim();
+          const safeSlug = cleanName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+          const deterministicId = `addon-${targetOrderId}-${safeSlug}-${idx}`;
+
           const existingIndex = currentReqs.findIndex(
             (r) =>
-              r.category === 'Add-ons' &&
-              (r.title === itemTitle || (r.orderId === targetOrderId && r.title.startsWith(addon)))
+              r.id === deterministicId ||
+              (r.orderId === targetOrderId && r.title.startsWith(cleanName))
           );
 
           if (existingIndex >= 0) {
-            // Update completion status if changed
             if (currentReqs[existingIndex].isCompleted !== isDone) {
               currentReqs[existingIndex] = {
                 ...currentReqs[existingIndex],
@@ -186,8 +181,8 @@ export default function App() {
             }
           } else {
             const newReq: GeneralRequirement = {
-              id: `addon-req-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              title: itemTitle,
+              id: deterministicId,
+              title: `${cleanName} (${clientName})`,
               category: 'Add-ons',
               isCompleted: isDone,
               orderId: targetOrderId,
@@ -195,10 +190,18 @@ export default function App() {
             };
             currentReqs = [newReq, ...currentReqs];
           }
-        }
+        });
 
         setRequirements(currentReqs);
         await StorageService.saveRequirements(currentReqs);
+
+        if (currentUser) {
+          currentReqs
+            .filter((r) => r.orderId === targetOrderId)
+            .forEach((req) => {
+              FirestoreService.saveRequirement(currentUser.uid, req).catch(() => {});
+            });
+        }
       }
     }
   };
@@ -208,17 +211,11 @@ export default function App() {
     setOrders(updated);
     await StorageService.saveOrders(updated);
 
-    if (currentUser) {
-      FirestoreService.deleteOrder(currentUser.uid, id).catch((e) =>
-        console.warn('Failed to delete order from Firestore:', e)
-      );
-    }
-
     // Cancel notifications linked to this order
     await NotificationService.cancelOrderReminder(id);
     await checkReminders();
 
-    // Also remove any linked add-on checklist items
+    // Remove only checklist items linked to this specific order
     const updatedReqs = requirements.filter((r) => r.orderId !== id);
     if (updatedReqs.length !== requirements.length) {
       setRequirements(updatedReqs);
@@ -243,18 +240,9 @@ export default function App() {
     });
     setOrders(updated);
     await StorageService.saveOrders(updated);
-
-    if (currentUser) {
-      const advanced = updated.find((o) => o.id === id);
-      if (advanced) {
-        FirestoreService.saveOrder(currentUser.uid, advanced).catch((e) =>
-          console.warn('Failed to update order status in Firestore:', e)
-        );
-      }
-    }
   };
 
-  // Requirements State Handlers
+  // Requirements State Handlers - strictly targets ONLY the exact item matching id
   const handleToggleRequirement = async (id: string) => {
     const targetReq = requirements.find((r) => r.id === id);
     const updated = requirements.map((r) =>
@@ -262,7 +250,6 @@ export default function App() {
     );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-
     // If this requirement is linked to an order's addon, sync the boolean to the order
     if (targetReq && targetReq.orderId && targetReq.category === 'Add-ons') {
       const newStatus = !targetReq.isCompleted;
@@ -311,7 +298,7 @@ export default function App() {
 
   const handleAddRequirement = async (title: string, category: RequirementCategory) => {
     const newReq: GeneralRequirement = {
-      id: `req-${Date.now()}`,
+      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       title,
       category,
       isCompleted: false,
@@ -320,37 +307,18 @@ export default function App() {
     const updated = [newReq, ...requirements];
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-
-    if (currentUser) {
-      FirestoreService.saveRequirement(currentUser.uid, newReq).catch((e) =>
-        console.warn('Failed to save requirement to Firestore:', e)
-      );
-    }
   };
 
   const handleDeleteRequirement = async (id: string) => {
     const updated = requirements.filter((r) => r.id !== id);
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-
-    if (currentUser) {
-      FirestoreService.deleteRequirement(currentUser.uid, id).catch((e) =>
-        console.warn('Failed to delete requirement from Firestore:', e)
-      );
-    }
   };
 
   const handleClearCompleted = async (category: RequirementCategory) => {
-    const toDelete = requirements.filter((r) => r.category === category && r.isCompleted);
     const updated = requirements.filter((r) => !(r.category === category && r.isCompleted));
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-
-    if (currentUser) {
-      toDelete.forEach((r) => {
-        FirestoreService.deleteRequirement(currentUser.uid, r.id).catch(() => {});
-      });
-    }
   };
 
   const handleDismissNotification = async (notifId: string) => {
@@ -360,39 +328,75 @@ export default function App() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView
+      style={[
+        styles.safeArea,
+        { backgroundColor: Theme.colors.background },
+      ]}
+    >
       <StatusBar barStyle="dark-content" />
 
       {/* Main App Bar */}
-      <View style={styles.topBar}>
+      <View
+        style={[
+          styles.topBar,
+          {
+            backgroundColor: Theme.colors.background,
+            borderBottomColor: Theme.colors.border,
+          },
+        ]}
+      >
         <View style={styles.brandRow}>
           <Text style={styles.brandEmoji}>🎂</Text>
           <View>
-            <Text style={styles.brandTitle}>SweetBake Studio</Text>
-            <Text style={styles.brandSubtitle}>Custom Bakery Management</Text>
+            <Text
+              style={[styles.brandTitle, { color: Theme.colors.textDark }]}
+            >
+              SweetBake Studio
+            </Text>
+            <Text
+              style={[
+                styles.brandSubtitle,
+                { color: Theme.colors.textSecondary },
+              ]}
+            >
+              Single Bakery Kitchen
+            </Text>
           </View>
         </View>
 
-        {/* Header Right Actions */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          {/* Cloud / Auth Button */}
+        {/* Right Action Icons: Profile & Bell Reminder Notification */}
+        <View style={styles.headerRightActions}>
+          {/* User Profile / Login Button */}
           <TouchableOpacity
-            style={styles.bellButton}
+            style={[
+              styles.actionIconButton,
+              {
+                backgroundColor: Theme.colors.card,
+                borderColor: currentUser ? '#2E7D32' : Theme.colors.border,
+              },
+            ]}
             onPress={() => {
               triggerHaptic.selection();
               setShowAuthModal(true);
             }}
           >
             <Ionicons
-              name={currentUser ? 'cloud-done' : 'cloud-offline-outline'}
-              size={22}
-              color={currentUser ? Theme.colors.deepRose : Theme.colors.textDark}
+              name={currentUser ? 'person-circle' : 'person-circle-outline'}
+              size={20}
+              color={currentUser ? '#2E7D32' : Theme.colors.textDark}
             />
           </TouchableOpacity>
 
-          {/* Bell Reminder Notification Center */}
+          {/* Bell Reminder Center */}
           <TouchableOpacity
-            style={styles.bellButton}
+            style={[
+              styles.actionIconButton,
+              {
+                backgroundColor: Theme.colors.card,
+                borderColor: Theme.colors.border,
+              },
+            ]}
             onPress={() => {
               triggerHaptic.selection();
               setShowNotificationModal(true);
@@ -400,11 +404,20 @@ export default function App() {
           >
             <Ionicons
               name={dueNotifications.length > 0 ? 'notifications' : 'notifications-outline'}
-              size={22}
-              color={dueNotifications.length > 0 ? Theme.colors.deepRose : Theme.colors.textDark}
+              size={19}
+              color={
+                dueNotifications.length > 0
+                  ? Theme.colors.deepRose
+                  : Theme.colors.textDark
+              }
             />
             {dueNotifications.length > 0 && (
-              <View style={styles.bellBadge}>
+              <View
+                style={[
+                  styles.bellBadge,
+                  { backgroundColor: Theme.colors.deepRose },
+                ]}
+              >
                 <Text style={styles.bellBadgeText}>{dueNotifications.length}</Text>
               </View>
             )}
@@ -412,8 +425,13 @@ export default function App() {
         </View>
       </View>
 
-      {/* Screen Body */}
-      <View style={styles.screenContainer}>
+      {/* Screen Body with dynamic background matching Dark Mode */}
+      <View
+        style={[
+          styles.screenContainer,
+          { backgroundColor: Theme.colors.background },
+        ]}
+      >
         {activeTab === 'Orders' && (
           <DashboardScreen
             orders={orders}
@@ -442,7 +460,15 @@ export default function App() {
       </View>
 
       {/* Bottom Tab Bar */}
-      <View style={styles.tabBar}>
+      <View
+        style={[
+          styles.tabBar,
+          {
+            backgroundColor: Theme.colors.card,
+            borderTopColor: Theme.colors.border,
+          },
+        ]}
+      >
         <TouchableOpacity
           style={styles.tabItem}
           onPress={() => {
@@ -453,12 +479,20 @@ export default function App() {
           <Ionicons
             name={activeTab === 'Orders' ? 'gift' : 'gift-outline'}
             size={22}
-            color={activeTab === 'Orders' ? Theme.colors.deepRose : Theme.colors.textSecondary}
+            color={
+              activeTab === 'Orders'
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
+            }
           />
           <Text
             style={[
               styles.tabLabel,
-              activeTab === 'Orders' && styles.tabLabelActive,
+              { color: Theme.colors.textSecondary },
+              activeTab === 'Orders' && {
+                color: Theme.colors.deepRose,
+                fontWeight: '800',
+              },
             ]}
           >
             Orders
@@ -475,12 +509,20 @@ export default function App() {
           <Ionicons
             name={activeTab === 'Schedule' ? 'calendar' : 'calendar-outline'}
             size={22}
-            color={activeTab === 'Schedule' ? Theme.colors.deepRose : Theme.colors.textSecondary}
+            color={
+              activeTab === 'Schedule'
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
+            }
           />
           <Text
             style={[
               styles.tabLabel,
-              activeTab === 'Schedule' && styles.tabLabelActive,
+              { color: Theme.colors.textSecondary },
+              activeTab === 'Schedule' && {
+                color: Theme.colors.deepRose,
+                fontWeight: '800',
+              },
             ]}
           >
             Schedule
@@ -497,12 +539,20 @@ export default function App() {
           <Ionicons
             name={activeTab === 'Checklist' ? 'checkbox' : 'checkbox-outline'}
             size={22}
-            color={activeTab === 'Checklist' ? Theme.colors.deepRose : Theme.colors.textSecondary}
+            color={
+              activeTab === 'Checklist'
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
+            }
           />
           <Text
             style={[
               styles.tabLabel,
-              activeTab === 'Checklist' && styles.tabLabelActive,
+              { color: Theme.colors.textSecondary },
+              activeTab === 'Checklist' && {
+                color: Theme.colors.deepRose,
+                fontWeight: '800',
+              },
             ]}
           >
             Checklist
@@ -516,16 +566,44 @@ export default function App() {
         animationType="slide"
         presentationStyle="pageSheet"
       >
-        <SafeAreaView style={styles.notifModalContainer}>
-          <View style={styles.notifHeader}>
+        <SafeAreaView
+          style={[
+            styles.notifModalContainer,
+            { backgroundColor: Theme.colors.background },
+          ]}
+        >
+          <View
+            style={[
+              styles.notifHeader,
+              {
+                backgroundColor: Theme.colors.card,
+                borderBottomColor: Theme.colors.border,
+              },
+            ]}
+          >
             <View>
-              <Text style={styles.notifHeaderTitle}>Order Alerts & Reminders</Text>
-              <Text style={styles.notifHeaderSubtitle}>
+              <Text
+                style={[
+                  styles.notifHeaderTitle,
+                  { color: Theme.colors.textDark },
+                ]}
+              >
+                Order Alerts & Reminders
+              </Text>
+              <Text
+                style={[
+                  styles.notifHeaderSubtitle,
+                  { color: Theme.colors.textSecondary },
+                ]}
+              >
                 {dueNotifications.length} active alert{dueNotifications.length === 1 ? '' : 's'}
               </Text>
             </View>
             <TouchableOpacity
-              style={styles.notifCloseBtn}
+              style={[
+                styles.notifCloseBtn,
+                { backgroundColor: Theme.colors.warmIvory },
+              ]}
               onPress={() => setShowNotificationModal(false)}
             >
               <Ionicons name="close" size={22} color={Theme.colors.textDark} />
@@ -535,16 +613,35 @@ export default function App() {
           <ScrollView style={styles.notifBody} showsVerticalScrollIndicator={false}>
             {allReminders.length === 0 ? (
               <View style={styles.emptyNotifBox}>
-                <Ionicons name="notifications-off-outline" size={44} color={Theme.colors.softLilac} />
-                <Text style={styles.emptyNotifTitle}>No Reminders Scheduled</Text>
-                <Text style={styles.emptyNotifText}>
-                  When you add or edit an order, turn on "Order Reminder Notification" to receive in-app alerts before pickup or delivery!
+                <Ionicons
+                  name="notifications-off-outline"
+                  size={44}
+                  color={Theme.colors.softLilac}
+                />
+                <Text
+                  style={[
+                    styles.emptyNotifTitle,
+                    { color: Theme.colors.textDark },
+                  ]}
+                >
+                  No Reminders Scheduled
+                </Text>
+                <Text
+                  style={[
+                    styles.emptyNotifText,
+                    { color: Theme.colors.textSecondary },
+                  ]}
+                >
+                  Turn on "Order Reminder Notification" in any order to receive
+                  in-app alerts before pickup or delivery!
                 </Text>
               </View>
             ) : (
               <>
                 {allReminders.map((notif) => {
-                  const isDue = new Date(notif.triggerTime).getTime() <= Date.now() && !notif.isRead;
+                  const isDue =
+                    new Date(notif.triggerTime).getTime() <= Date.now() &&
+                    !notif.isRead;
                   const orderDate = new Date(notif.deliveryDate).toLocaleTimeString([], {
                     hour: 'numeric',
                     minute: '2-digit',
@@ -554,7 +651,14 @@ export default function App() {
                       key={notif.id}
                       style={[
                         styles.notifCard,
-                        isDue && styles.notifCardDue,
+                        {
+                          backgroundColor: Theme.colors.card,
+                          borderColor: Theme.colors.border,
+                        },
+                        isDue && {
+                          borderColor: Theme.colors.deepRose,
+                          borderWidth: 1.5,
+                        },
                         notif.isRead && styles.notifCardRead,
                       ]}
                     >
@@ -564,19 +668,35 @@ export default function App() {
                             style={[
                               styles.fulfillmentTag,
                               notif.fulfillmentType === 'Delivery'
-                                ? styles.tagDelivery
-                                : styles.tagPickup,
+                                ? { backgroundColor: Theme.colors.deepRose }
+                                : { backgroundColor: Theme.colors.softLilac },
                             ]}
                           >
                             <Ionicons
-                              name={notif.fulfillmentType === 'Delivery' ? 'car' : 'storefront'}
+                              name={
+                                notif.fulfillmentType === 'Delivery'
+                                  ? 'car'
+                                  : 'storefront'
+                              }
                               size={12}
                               color="#FFFFFF"
                               style={{ marginRight: 3 }}
                             />
-                            <Text style={styles.fulfillmentTagText}>{notif.fulfillmentType}</Text>
+                            <Text style={styles.fulfillmentTagText}>
+                              {notif.fulfillmentType}
+                            </Text>
                           </View>
-                          <Text style={styles.timingBadge}>{notif.timingLabel}</Text>
+                          <Text
+                            style={[
+                              styles.timingBadge,
+                              {
+                                backgroundColor: Theme.colors.warmIvory,
+                                color: Theme.colors.textSecondary,
+                              },
+                            ]}
+                          >
+                            {notif.timingLabel}
+                          </Text>
                         </View>
                         {isDue && (
                           <View style={styles.dueIndicator}>
@@ -585,14 +705,45 @@ export default function App() {
                         )}
                       </View>
 
-                      <Text style={styles.notifCustomer}>{notif.customerName}</Text>
-                      <Text style={styles.notifMessage}>{notif.message}</Text>
-                      <Text style={styles.notifTime}>Scheduled for: {orderDate}</Text>
+                      <Text
+                        style={[
+                          styles.notifCustomer,
+                          { color: Theme.colors.textDark },
+                        ]}
+                      >
+                        {notif.customerName}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.notifMessage,
+                          { color: Theme.colors.textSecondary },
+                        ]}
+                      >
+                        {notif.message}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.notifTime,
+                          { color: Theme.colors.textDark },
+                        ]}
+                      >
+                        Scheduled for: {orderDate}
+                      </Text>
 
                       {Boolean(notif.location) && (
                         <View style={styles.notifLocationRow}>
-                          <Ionicons name="location-outline" size={12} color={Theme.colors.textSecondary} />
-                          <Text style={styles.notifLocationText} numberOfLines={1}>
+                          <Ionicons
+                            name="location-outline"
+                            size={12}
+                            color={Theme.colors.textSecondary}
+                          />
+                          <Text
+                            style={[
+                              styles.notifLocationText,
+                              { color: Theme.colors.textSecondary },
+                            ]}
+                            numberOfLines={1}
+                          >
                             {notif.location}
                           </Text>
                         </View>
@@ -600,11 +751,21 @@ export default function App() {
 
                       {!notif.isRead && (
                         <TouchableOpacity
-                          style={styles.dismissBtn}
+                          style={[
+                            styles.dismissBtn,
+                            { backgroundColor: Theme.colors.deepRose },
+                          ]}
                           onPress={() => handleDismissNotification(notif.id)}
                         >
-                          <Ionicons name="checkmark-done" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.dismissBtnText}>Dismiss Reminder</Text>
+                          <Ionicons
+                            name="checkmark-done"
+                            size={14}
+                            color="#FFFFFF"
+                            style={{ marginRight: 4 }}
+                          />
+                          <Text style={styles.dismissBtnText}>
+                            Dismiss Reminder
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -615,8 +776,8 @@ export default function App() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-
-      {/* Firebase Email/Password Auth Modal */}
+    
+      {/* Firebase Auth Modal */}
       <AuthModal
         visible={showAuthModal}
         onClose={() => setShowAuthModal(false)}
@@ -629,15 +790,12 @@ export default function App() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Theme.colors.cream,
   },
   topBar: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 10,
-    backgroundColor: Theme.colors.cream,
     borderBottomWidth: 1,
-    borderBottomColor: Theme.colors.border,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -645,28 +803,29 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   brandEmoji: {
-    fontSize: 26,
+    fontSize: 24,
   },
   brandTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: Theme.colors.textDark,
   },
   brandSubtitle: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '600',
-    color: Theme.colors.textSecondary,
   },
-  bellButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Theme.colors.white,
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionIconButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
@@ -675,19 +834,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: -2,
     right: -2,
-    backgroundColor: Theme.colors.deepRose,
-    minWidth: 18,
-    height: 18,
+    minWidth: 17,
+    height: 17,
     borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
     borderWidth: 1.5,
     borderColor: '#FFFFFF',
   },
   bellBadgeText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '800',
   },
   screenContainer: {
@@ -696,9 +854,7 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     height: 64,
-    backgroundColor: Theme.colors.white,
     borderTopWidth: 1,
-    borderTopColor: Theme.colors.border,
     paddingBottom: 6,
     paddingTop: 6,
     alignItems: 'center',
@@ -712,16 +868,10 @@ const styles = StyleSheet.create({
   tabLabel: {
     fontSize: 11,
     fontWeight: '600',
-    color: Theme.colors.textSecondary,
     marginTop: 2,
-  },
-  tabLabelActive: {
-    color: Theme.colors.deepRose,
-    fontWeight: '800',
   },
   notifModalContainer: {
     flex: 1,
-    backgroundColor: Theme.colors.cream,
   },
   notifHeader: {
     flexDirection: 'row',
@@ -729,24 +879,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: Theme.colors.white,
     borderBottomWidth: 1,
-    borderBottomColor: Theme.colors.border,
   },
   notifHeaderTitle: {
     fontSize: 18,
     fontWeight: '800',
-    color: Theme.colors.textDark,
   },
   notifHeaderSubtitle: {
     fontSize: 12,
-    color: Theme.colors.textSecondary,
     marginTop: 2,
   },
   notifCloseBtn: {
     padding: 6,
     borderRadius: 18,
-    backgroundColor: Theme.colors.cream,
   },
   notifBody: {
     flex: 1,
@@ -761,28 +906,19 @@ const styles = StyleSheet.create({
   emptyNotifTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: Theme.colors.textDark,
     marginTop: 12,
   },
   emptyNotifText: {
     fontSize: 13,
-    color: Theme.colors.textSecondary,
     textAlign: 'center',
     lineHeight: 18,
     marginTop: 6,
   },
   notifCard: {
-    backgroundColor: Theme.colors.white,
     borderRadius: 14,
     padding: 14,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: Theme.colors.border,
-  },
-  notifCardDue: {
-    borderColor: Theme.colors.deepRose,
-    backgroundColor: '#FFF7F9',
-    borderWidth: 1.5,
   },
   notifCardRead: {
     opacity: 0.6,
@@ -805,12 +941,6 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 8,
   },
-  tagDelivery: {
-    backgroundColor: Theme.colors.deepRose,
-  },
-  tagPickup: {
-    backgroundColor: Theme.colors.softLilac,
-  },
   fulfillmentTagText: {
     color: '#FFFFFF',
     fontSize: 10,
@@ -819,8 +949,6 @@ const styles = StyleSheet.create({
   timingBadge: {
     fontSize: 10,
     fontWeight: '600',
-    color: Theme.colors.textSecondary,
-    backgroundColor: Theme.colors.cream,
     paddingHorizontal: 6,
     paddingVertical: 3,
     borderRadius: 6,
@@ -839,16 +967,13 @@ const styles = StyleSheet.create({
   notifCustomer: {
     fontSize: 16,
     fontWeight: '700',
-    color: Theme.colors.textDark,
   },
   notifMessage: {
     fontSize: 13,
-    color: Theme.colors.textSecondary,
     marginTop: 2,
   },
   notifTime: {
     fontSize: 11,
-    color: Theme.colors.textDark,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -860,13 +985,11 @@ const styles = StyleSheet.create({
   },
   notifLocationText: {
     fontSize: 11,
-    color: Theme.colors.textSecondary,
   },
   dismissBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Theme.colors.deepRose,
     borderRadius: 10,
     paddingVertical: 8,
     marginTop: 10,

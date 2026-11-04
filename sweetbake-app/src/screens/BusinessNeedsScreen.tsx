@@ -35,10 +35,10 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
   onDeleteRequirement,
   onClearCompleted,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<RequirementCategory>('Ingredients');
+  const [selectedCategory, setSelectedCategory] = useState<RequirementCategory>('Add-ons');
   const [newTitle, setNewTitle] = useState('');
 
-  // Automatically sort: Uncompleted first, then Completed moved to bottom with strikethrough
+  // Strict per-item segregation:
   const categoryItems = requirements.filter((r) => r.category === selectedCategory);
   const uncompleted = categoryItems.filter((r) => !r.isCompleted);
   const completed = categoryItems.filter((r) => r.isCompleted);
@@ -60,22 +60,22 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
 
   const getCategoryIcon = (cat: RequirementCategory) => {
     switch (cat) {
+      case 'Add-ons':
+        return 'sparkles' as const;
       case 'Ingredients':
         return 'cafe' as const;
       case 'Packaging':
         return 'cube' as const;
       case 'Tools':
         return 'construct' as const;
-      case 'Add-ons':
-        return 'sparkles' as const;
     }
   };
 
   return (
     <View style={styles.container}>
-      {/* Category Tabs */}
+      {/* Category Tabs with Add-ons first */}
       <View style={styles.categoryRow}>
-        {(['Ingredients', 'Packaging', 'Tools', 'Add-ons'] as RequirementCategory[]).map((cat) => {
+        {(['Add-ons', 'Ingredients', 'Packaging', 'Tools'] as RequirementCategory[]).map((cat) => {
           const isSelected = selectedCategory === cat;
           const pendingCount = requirements.filter(
             (r) => r.category === cat && !r.isCompleted
@@ -121,7 +121,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         })}
       </View>
 
-      {/* Quick Add Bar */}
+      {/* Quick Add Bar for To-Do item */}
       <View style={styles.inputContainer}>
         <Ionicons
           name={getCategoryIcon(selectedCategory)}
@@ -131,7 +131,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         />
         <TextInput
           style={styles.textInput}
-          placeholder={`Add ${selectedCategory.toLowerCase()} item...`}
+          placeholder={`Add new ${selectedCategory === 'Add-ons' ? 'Add-on requirement' : selectedCategory.toLowerCase()}...`}
           placeholderTextColor={Theme.colors.textSecondary}
           value={newTitle}
           onChangeText={setNewTitle}
@@ -145,27 +145,19 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         )}
       </View>
 
-      {/* Progress & Clear Bar */}
-      {categoryItems.length > 0 && (
-        <View style={styles.statusSubHeader}>
-          <Text style={styles.progressText}>
-            {completed.length} of {categoryItems.length} completed
-          </Text>
+      {/* Sub-header with To-Do Progress Count */}
+      <View style={styles.statusSubHeader}>
+        <Text style={styles.progressText}>
+          {uncompleted.length} to do • {completed.length} completed
+        </Text>
+        {completed.length > 0 && (
+          <TouchableOpacity onPress={() => onClearCompleted(selectedCategory)}>
+            <Text style={styles.clearDoneText}>Clear done</Text>
+          </TouchableOpacity>
+        )}
+      </View>
 
-          {completed.length > 0 && (
-            <TouchableOpacity
-              onPress={() => {
-                triggerHaptic.warning();
-                onClearCompleted(selectedCategory);
-              }}
-            >
-              <Text style={styles.clearDoneText}>Clear Done</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      {/* Checklist FlatList */}
+      {/* Interactive To-Do List */}
       <FlatList
         data={sortedItems}
         keyExtractor={(item) => item.id}
@@ -173,8 +165,8 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
-            title={`No ${selectedCategory} Needed`}
-            subtitle="Your supplies checklist for this category is clear! Type above to add items."
+            title={`No ${selectedCategory} To-Dos`}
+            subtitle={`All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`}
           />
         }
         renderItem={({ item }) => (
@@ -195,15 +187,23 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
               </View>
             </TouchableOpacity>
 
-            <Text
-              style={[
-                styles.itemTitle,
-                item.isCompleted && styles.itemTitleCompleted,
-              ]}
-              onPress={() => handleToggle(item.id)}
-            >
-              {item.title}
-            </Text>
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.itemTitle,
+                  item.isCompleted && styles.itemTitleCompleted,
+                ]}
+                onPress={() => handleToggle(item.id)}
+              >
+                {item.title}
+              </Text>
+              {item.category === 'Add-ons' && (
+                <View style={styles.addonTag}>
+                  <Ionicons name="sparkles" size={10} color={Theme.colors.deepRose} style={{ marginRight: 3 }} />
+                  <Text style={styles.addonTagText}>Add-on Requirement</Text>
+                </View>
+              )}
+            </View>
 
             <TouchableOpacity
               onPress={() => {
@@ -212,7 +212,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
               }}
               style={styles.deleteBtn}
             >
-              <Ionicons name="trash-outline" size={15} color={Theme.colors.textSecondary} />
+              <Ionicons name="trash-outline" size={16} color={Theme.colors.textSecondary} />
             </TouchableOpacity>
           </View>
         )}
@@ -359,7 +359,6 @@ const styles = StyleSheet.create({
     backgroundColor: Theme.colors.status.deliveredDark,
   },
   itemTitle: {
-    flex: 1,
     fontSize: 14,
     fontWeight: '600',
     color: Theme.colors.textDark,
@@ -368,8 +367,17 @@ const styles = StyleSheet.create({
     color: Theme.colors.textSecondary,
     textDecorationLine: 'line-through',
   },
+  addonTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  addonTagText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Theme.colors.deepRose,
+  },
   deleteBtn: {
     padding: 4,
   },
 });
-
