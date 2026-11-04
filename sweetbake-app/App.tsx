@@ -249,16 +249,42 @@ export default function App() {
 
     // Synchronize Add-ons with Checklist (Business Needs)
     // Addons are stored in order as a clean string[] list; boolean status is stored in requirements
-    if (orderData.addons && orderData.addons.length > 0) {
-      const clientName = orderData.customerName || 'Cake Order';
-      let currentReqs = [...requirements];
-
+    if (targetOrderId) {
+      const clientName = orderData.customerName || 'Cake Commission';
       const addonList: string[] = Array.isArray(orderData.addons)
         ? orderData.addons
-        : Object.keys(orderData.addons);
+        : orderData.addons && typeof orderData.addons === 'object'
+        ? Object.keys(orderData.addons)
+        : [];
 
-      addonList.forEach((addon, idx) => {
-        const cleanName = addon.trim();
+      // Clean list of addon titles for comparison
+      const trimmedAddons = addonList.map((a) => a.trim()).filter(Boolean);
+
+      // 1. Identify which existing Add-ons in requirements belong to this order
+      const existingOrderAddonReqs = requirements.filter(
+        (r) => r.orderId === targetOrderId && r.category === 'Add-ons'
+      );
+
+      // 2. Detect removed add-ons (existed before in requirements, but not in trimmedAddons)
+      const toDeleteReqs = existingOrderAddonReqs.filter((req) => {
+        // req.title is typically "${addonName} (${clientName})"
+        const matchesCurrentAddon = trimmedAddons.some((addonName) =>
+          req.title.startsWith(addonName) || req.id.includes(addonName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase())
+        );
+        return !matchesCurrentAddon;
+      });
+
+      // Delete removed add-ons from Firestore
+      toDeleteReqs.forEach((r) => {
+        FirestoreService.deleteRequirement(r.id).catch(() => {});
+      });
+
+      // 3. Keep requirements without the removed ones
+      const toDeleteIds = new Set(toDeleteReqs.map((r) => r.id));
+      let currentReqs = requirements.filter((r) => !toDeleteIds.has(r.id));
+
+      // 4. Add any newly added add-ons
+      trimmedAddons.forEach((cleanName, idx) => {
         const safeSlug = cleanName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
         const deterministicId = `addon-${targetOrderId}-${safeSlug}-${idx}`;
 
@@ -286,8 +312,9 @@ export default function App() {
       setRequirements(currentReqs);
       await StorageService.saveRequirements(currentReqs);
 
+      // Sync active order addon requirements to Firestore
       currentReqs
-        .filter((r) => r.orderId === targetOrderId)
+        .filter((r) => r.orderId === targetOrderId && r.category === 'Add-ons')
         .forEach((req) => {
           FirestoreService.saveRequirement(req).catch(() => {});
         });
