@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus } from './src/types';
 import { StorageService } from './src/services/storage';
 import { NotificationService, InAppNotification } from './src/services/notifications';
-import { LightTheme, DarkTheme } from './src/theme';
+import { LightTheme, DarkTheme, Theme, setActiveTheme } from './src/theme';
 import { triggerHaptic } from './src/services/haptics';
 
 // Screens
@@ -26,7 +26,7 @@ export default function App() {
   const [orders, setOrders] = useState<CakeOrder[]>([]);
   const [requirements, setRequirements] = useState<GeneralRequirement[]>([]);
 
-  // Dark Mode State
+  // Dark Mode State - updates both local state and the global Theme proxy
   const [isDarkMode, setIsDarkMode] = useState(false);
   const currentTheme = isDarkMode ? DarkTheme : LightTheme;
 
@@ -34,6 +34,9 @@ export default function App() {
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
   const [showNotificationModal, setShowNotificationModal] = useState(false);
   const [allReminders, setAllReminders] = useState<InAppNotification[]>([]);
+
+  // App re-render trigger for child components reading Theme directly
+  const [, setTick] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -58,7 +61,11 @@ export default function App() {
 
   const toggleDarkMode = () => {
     triggerHaptic.selection();
-    setIsDarkMode((prev) => !prev);
+    const nextMode = !isDarkMode;
+    const nextTheme = nextMode ? DarkTheme : LightTheme;
+    setActiveTheme(nextTheme);
+    setIsDarkMode(nextMode);
+    setTick((t) => t + 1);
   };
 
   // Orders State Handlers
@@ -321,8 +328,13 @@ export default function App() {
         </View>
       </View>
 
-      {/* Screen Body */}
-      <View style={styles.screenContainer}>
+      {/* Screen Body with dynamic background matching Dark Mode */}
+      <View
+        style={[
+          styles.screenContainer,
+          { backgroundColor: currentTheme.colors.background },
+        ]}
+      >
         {activeTab === 'Orders' && (
           <DashboardScreen
             orders={orders}

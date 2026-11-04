@@ -132,5 +132,18 @@ export const DarkTheme: ThemePalette = {
   },
 };
 
-// Default fallback reference for existing components
-export const Theme = LightTheme;
+// Global active theme reference that components read from:
+// It dynamically proxies color lookups to the currently active palette
+let _activeTheme: ThemePalette = LightTheme;
+
+export const setActiveTheme = (theme: ThemePalette) => {
+  _activeTheme = theme;
+  Object.assign(Theme.colors, theme.colors);
+  Theme.isDark = theme.isDark;
+};
+
+export const Theme: ThemePalette = {
+  isDark: false,
+  colors: { ...LightTheme.colors },
+  borderRadius: { ...LightTheme.borderRadius },
+};
