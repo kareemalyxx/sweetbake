@@ -8,7 +8,7 @@ import {
   query,
   orderBy,
 } from 'firebase/firestore';
-import { db, auth } from './firebase';
+import { db } from './firebase';
 import { CakeOrder, GeneralRequirement } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -17,14 +17,13 @@ const REQS_CACHE_KEY = '@sweetbake_reqs_cache_v1';
 
 export const FirestoreService = {
   /**
-   * Listen to real-time updates for user's cake orders
+   * Listen to real-time updates for bakery cake orders (direct root collection)
    */
   subscribeToOrders(
-    userId: string,
     onSuccess: (orders: CakeOrder[]) => void,
     onError?: (err: Error) => void
   ): () => void {
-    const ordersCol = collection(db, 'users', userId, 'orders');
+    const ordersCol = collection(db, 'orders');
     const q = query(ordersCol, orderBy('createdAt', 'desc'));
 
     return onSnapshot(
@@ -47,9 +46,9 @@ export const FirestoreService = {
   /**
    * Fetch orders once from Firestore (with local cache fallback)
    */
-  async getOrders(userId: string): Promise<CakeOrder[]> {
+  async getOrders(): Promise<CakeOrder[]> {
     try {
-      const ordersCol = collection(db, 'users', userId, 'orders');
+      const ordersCol = collection(db, 'orders');
       const q = query(ordersCol, orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
       const orders: CakeOrder[] = [];
@@ -68,11 +67,10 @@ export const FirestoreService = {
   /**
    * Create or update an order
    */
-  async saveOrder(userId: string, order: CakeOrder): Promise<void> {
-    const orderRef = doc(db, 'users', userId, 'orders', order.id);
+  async saveOrder(order: CakeOrder): Promise<void> {
+    const orderRef = doc(db, 'orders', order.id);
     const dataToSave = {
       ...order,
-      userId,
       updatedAt: new Date().toISOString(),
     };
     await setDoc(orderRef, dataToSave, { merge: true });
@@ -81,20 +79,19 @@ export const FirestoreService = {
   /**
    * Delete an order
    */
-  async deleteOrder(userId: string, orderId: string): Promise<void> {
-    const orderRef = doc(db, 'users', userId, 'orders', orderId);
+  async deleteOrder(orderId: string): Promise<void> {
+    const orderRef = doc(db, 'orders', orderId);
     await deleteDoc(orderRef);
   },
 
   /**
-   * Listen to real-time updates for bakery checklist requirements
+   * Listen to real-time updates for bakery checklist requirements (direct root collection)
    */
   subscribeToRequirements(
-    userId: string,
     onSuccess: (reqs: GeneralRequirement[]) => void,
     onError?: (err: Error) => void
   ): () => void {
-    const reqsCol = collection(db, 'users', userId, 'requirements');
+    const reqsCol = collection(db, 'requirements');
     const q = query(reqsCol, orderBy('createdAt', 'desc'));
 
     return onSnapshot(
@@ -117,9 +114,9 @@ export const FirestoreService = {
   /**
    * Fetch requirements once
    */
-  async getRequirements(userId: string): Promise<GeneralRequirement[]> {
+  async getRequirements(): Promise<GeneralRequirement[]> {
     try {
-      const reqsCol = collection(db, 'users', userId, 'requirements');
+      const reqsCol = collection(db, 'requirements');
       const q = query(reqsCol, orderBy('createdAt', 'desc'));
       const snapshot = await getDocs(q);
       const reqs: GeneralRequirement[] = [];
@@ -138,11 +135,10 @@ export const FirestoreService = {
   /**
    * Save a requirement item
    */
-  async saveRequirement(userId: string, req: GeneralRequirement): Promise<void> {
-    const reqRef = doc(db, 'users', userId, 'requirements', req.id);
+  async saveRequirement(req: GeneralRequirement): Promise<void> {
+    const reqRef = doc(db, 'requirements', req.id);
     const dataToSave = {
       ...req,
-      userId,
       updatedAt: new Date().toISOString(),
     };
     await setDoc(reqRef, dataToSave, { merge: true });
@@ -151,8 +147,8 @@ export const FirestoreService = {
   /**
    * Delete a requirement item
    */
-  async deleteRequirement(userId: string, reqId: string): Promise<void> {
-    const reqRef = doc(db, 'users', userId, 'requirements', reqId);
+  async deleteRequirement(reqId: string): Promise<void> {
+    const reqRef = doc(db, 'requirements', reqId);
     await deleteDoc(reqRef);
   },
 };

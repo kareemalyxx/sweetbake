@@ -46,28 +46,38 @@ export default function App() {
   const [, setTick] = useState(0);
 
   useEffect(() => {
-    let unsubscribeOrders: (() => void) | undefined;
-    let unsubscribeReqs: (() => void) | undefined;
+    // Initial local cache load
+    loadData();
 
-    if (currentUser) {
-      unsubscribeOrders = FirestoreService.subscribeToOrders(currentUser.uid, (cloudOrders) => {
-        setOrders(cloudOrders);
-      });
-      unsubscribeReqs = FirestoreService.subscribeToRequirements(currentUser.uid, (cloudReqs) => {
-        setRequirements(cloudReqs);
-      });
-    } else {
-      loadData();
-    }
+    // Real-time Firestore sync on root collections
+    const unsubscribeOrders = FirestoreService.subscribeToOrders(
+      (cloudOrders) => {
+        if (cloudOrders && cloudOrders.length > 0) {
+          setOrders(cloudOrders);
+          StorageService.saveOrders(cloudOrders).catch(() => {});
+        }
+      },
+      (err) => console.warn('Firestore orders sync notice:', err.message)
+    );
+
+    const unsubscribeReqs = FirestoreService.subscribeToRequirements(
+      (cloudReqs) => {
+        if (cloudReqs && cloudReqs.length > 0) {
+          setRequirements(cloudReqs);
+          StorageService.saveRequirements(cloudReqs).catch(() => {});
+        }
+      },
+      (err) => console.warn('Firestore requirements sync notice:', err.message)
+    );
 
     checkReminders();
     const interval = setInterval(checkReminders, 20000); // Check every 20 seconds
     return () => {
       clearInterval(interval);
-      if (unsubscribeOrders) unsubscribeOrders();
-      if (unsubscribeReqs) unsubscribeReqs();
+      unsubscribeOrders();
+      unsubscribeReqs();
     };
-  }, [currentUser]);
+  }, []);
 
   const loadData = async () => {
     const fetchedOrders = await StorageService.getOrders();
@@ -133,11 +143,11 @@ export default function App() {
     setOrders(updatedOrders);
     await StorageService.saveOrders(updatedOrders);
 
-    // Sync order to Firestore if logged in
-    if (currentUser && targetOrderId) {
+    // Direct root collection sync to Firestore
+    if (targetOrderId) {
       const orderToSave = updatedOrders.find((o) => o.id === targetOrderId);
       if (orderToSave) {
-        FirestoreService.saveOrder(currentUser.uid, orderToSave).catch((e) =>
+        FirestoreService.saveOrder(orderToSave).catch((e) =>
           console.warn('Failed to sync order to Firestore:', e)
         );
       }
@@ -195,13 +205,11 @@ export default function App() {
         setRequirements(currentReqs);
         await StorageService.saveRequirements(currentReqs);
 
-        if (currentUser) {
-          currentReqs
-            .filter((r) => r.orderId === targetOrderId)
-            .forEach((req) => {
-              FirestoreService.saveRequirement(currentUser.uid, req).catch(() => {});
-            });
-        }
+        currentReqs
+          .filter((r) => r.orderId === targetOrderId)
+          .forEach((req) => {
+            FirestoreService.saveRequirement(req).catch(() => {});
+          });
       }
     }
   };
@@ -211,15 +219,32 @@ export default function App() {
     setOrders(updated);
     await StorageService.saveOrders(updated);
 
+    const advanced = updated.find((o) => o.id === id);
+    if (advanced) {
+      FirestoreService.saveOrder(advanced).catch((e) =>
+        console.warn('Failed to update status in Firestore:', e)
+      );
+    }
+
     // Cancel notifications linked to this order
     await NotificationService.cancelOrderReminder(id);
     await checkReminders();
+
+    // Delete from Firestore root collection
+    FirestoreService.deleteOrder(id).catch((e) =>
+      console.warn('Failed to delete order from Firestore:', e)
+    );
 
     // Remove only checklist items linked to this specific order
     const updatedReqs = requirements.filter((r) => r.orderId !== id);
     if (updatedReqs.length !== requirements.length) {
       setRequirements(updatedReqs);
       await StorageService.saveRequirements(updatedReqs);
+
+      // Remove from Firestore
+      requirements
+        .filter((r) => r.orderId === id)
+        .forEach((r) => FirestoreService.deleteRequirement(r.id).catch(() => {}));
     }
   };
 
@@ -240,6 +265,13 @@ export default function App() {
     });
     setOrders(updated);
     await StorageService.saveOrders(updated);
+
+    const advanced = updated.find((o) => o.id === id);
+    if (advanced) {
+      FirestoreService.saveOrder(advanced).catch((e) =>
+        console.warn('Failed to update status in Firestore:', e)
+      );
+    }
   };
 
   // Requirements State Handlers - strictly targets ONLY the exact item matching id
@@ -275,24 +307,20 @@ export default function App() {
         setOrders(updatedOrdersList);
         await StorageService.saveOrders(updatedOrdersList);
 
-        if (currentUser) {
-          const syncedOrder = updatedOrdersList.find((o) => o.id === linkedOrder.id);
-          if (syncedOrder) {
-            FirestoreService.saveOrder(currentUser.uid, syncedOrder).catch((e) =>
-              console.warn('Failed to sync updated order addons to Firestore:', e)
-            );
-          }
+        const syncedOrder = updatedOrdersList.find((o) => o.id === linkedOrder.id);
+        if (syncedOrder) {
+          FirestoreService.saveOrder(syncedOrder).catch((e) =>
+            console.warn('Failed to sync updated order addons to Firestore:', e)
+          );
         }
       }
     }
 
-    if (currentUser) {
-      const toggled = updated.find((r) => r.id === id);
-      if (toggled) {
-        FirestoreService.saveRequirement(currentUser.uid, toggled).catch((e) =>
-          console.warn('Failed to sync requirement to Firestore:', e)
-        );
-      }
+    const toggled = updated.find((r) => r.id === id);
+    if (toggled) {
+      FirestoreService.saveRequirement(toggled).catch((e) =>
+        console.warn('Failed to sync requirement to Firestore:', e)
+      );
     }
   };
 
@@ -307,18 +335,24 @@ export default function App() {
     const updated = [newReq, ...requirements];
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+    FirestoreService.saveRequirement(newReq).catch(() => {});
   };
 
   const handleDeleteRequirement = async (id: string) => {
     const updated = requirements.filter((r) => r.id !== id);
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+    FirestoreService.deleteRequirement(id).catch(() => {});
   };
 
   const handleClearCompleted = async (category: RequirementCategory) => {
+    const completedIds = requirements
+      .filter((r) => r.category === category && r.isCompleted)
+      .map((r) => r.id);
     const updated = requirements.filter((r) => !(r.category === category && r.isCompleted));
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
+    completedIds.forEach((id) => FirestoreService.deleteRequirement(id).catch(() => {}));
   };
 
   const handleDismissNotification = async (notifId: string) => {

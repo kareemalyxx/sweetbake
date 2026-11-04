@@ -34,8 +34,7 @@ service cloud.firestore {
     //   - reminderEnabled: bool (optional)
     //   - reminderTiming: string (optional, enum: 'on_time'|'15_min'|'1_hour'|'2_hours'|'1_day')
     //   - addons: map of addon name to boolean status (optional, max 30 entries) or legacy list of strings
-    // 
-     - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
+    //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
     //   - createdAt: timestamp or string (required on create, immutable)
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, if present must equal request.auth.uid and remain immutable)
@@ -171,73 +170,34 @@ service cloud.firestore {
     }
 
     // ===============================================================
-    // Security Rules Match Blocks
+    // Security Rules Match Blocks (Single Bakery Kitchen Architecture)
+    // Direct root collections: /orders and /requirements
     // ===============================================================
 
-    // Root-level default deny
-    match /{document=**} {
-      allow read, write: if false;
+    // Root-level orders collection for the bakery
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if isValidOrder(request.resource.data);
+      allow update: if isValidOrder(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt', 'id']);
+      allow delete: if true;
     }
 
-    // -------------------------------------------------------------
-    // User Profile Documents
-    // -------------------------------------------------------------
+    // Root-level requirements / checklist collection for the bakery
+    match /requirements/{reqId} {
+      allow read: if true;
+      allow create: if isValidRequirement(request.resource.data);
+      allow update: if isValidRequirement(request.resource.data) &&
+        areImmutableFieldsUnchanged(['createdAt', 'id']);
+      allow delete: if true;
+    }
+
+    // Optional user profile support (for staff profile settings if needed)
     match /users/{userId} {
-      // Only the profile owner can read their profile (protects PII such as email)
       allow read: if isOwner(userId);
-
-      // Only the owner can create their profile with valid initial schema
-      allow create: if isOwner(userId) &&
-        isValidUser(request.resource.data);
-
-      // Only the owner can update their profile; createdAt is immutable
-      allow update: if isOwner(userId) &&
-        isValidUser(request.resource.data) &&
-        areImmutableFieldsUnchanged(['createdAt']);
-
-      // Profile deletion restricted to the account owner
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if isOwner(userId) && isValidUser(request.resource.data) && areImmutableFieldsUnchanged(['createdAt']);
       allow delete: if isOwner(userId);
-
-      // -----------------------------------------------------------
-      // Orders Subcollection: /users/{userId}/orders/{orderId}
-      // -----------------------------------------------------------
-      match /orders/{orderId} {
-        // Only the bakery owner can read their orders
-        allow read: if isOwner(userId);
-
-        // Create order: user must be authenticated owner and submit valid order schema
-        allow create: if isOwner(userId) &&
-          isValidOrder(request.resource.data);
-
-        // Update order: user must be authenticated owner, validate entire schema,
-        // and protect immutable fields (createdAt, id, userId)
-        allow update: if isOwner(userId) &&
-          isValidOrder(request.resource.data) &&
-          areImmutableFieldsUnchanged(['createdAt', 'id', 'userId']);
-
-        // Delete order: only the owner
-        allow delete: if isOwner(userId);
-      }
-
-      // -----------------------------------------------------------
-      // Requirements Subcollection: /users/{userId}/requirements/{reqId}
-      // -----------------------------------------------------------
-      match /requirements/{reqId} {
-        // Only the bakery owner can read their business requirements / checklist
-        allow read: if isOwner(userId);
-
-        // Create requirement: must be authenticated owner and meet schema requirements
-        allow create: if isOwner(userId) &&
-          isValidRequirement(request.resource.data);
-
-        // Update requirement: must validate schema and preserve immutable fields
-        allow update: if isOwner(userId) &&
-          isValidRequirement(request.resource.data) &&
-          areImmutableFieldsUnchanged(['createdAt', 'id', 'userId']);
-
-        // Delete requirement: only the owner
-        allow delete: if isOwner(userId);
-      }
     }
   }
 }
