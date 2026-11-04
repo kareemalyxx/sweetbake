@@ -1,7 +1,9 @@
 import SwiftUI
 
-// MARK: - Premium Native iOS Revenue Tracker Card
+// MARK: - Premium Native iOS Revenue Tracker Card (HIG & Accessibility Compliant)
 public struct RevenueTrackerView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
     public let orders: [Order]
     
     public init(orders: [Order]) {
@@ -55,15 +57,14 @@ public struct RevenueTrackerView: View {
                     
                     Text("Total: $\(totalRevenue, specifier: "%.2f")")
                         .font(.subheadline)
-                        .foregroundColor(Theme.Colors.textSecondary)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
                 
                 Spacer()
                 
                 if totalRevenue > 0 {
                     Text("\(fulfilledPercent)% Fulfilled")
-                        .font(.caption)
-                        .fontWeight(.bold)
+                        .font(.caption.weight(.bold))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 4)
                         .background(Theme.Colors.lavenderLight)
@@ -72,25 +73,14 @@ public struct RevenueTrackerView: View {
                 }
             }
             
-            // Native Progress Bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Theme.Colors.warmIvory)
-                        .frame(height: 8)
-                    
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [Theme.Colors.pastelRose, Theme.Colors.deepRose],
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .frame(width: geo.size.width * CGFloat(min(1.0, Double(fulfilledPercent) / 100.0)), height: 8)
-                }
-            }
-            .frame(height: 8)
+            // Native Semantic Progress View with Standard HIG Styling
+            ProgressView(value: min(1.0, totalRevenue > 0 ? (completedRevenue / totalRevenue) : 0))
+                .tint(Theme.Colors.deepRose)
+                .background(Color(UIColor.tertiarySystemFill))
+                .clipShape(Capsule())
+                .scaleEffect(x: 1, y: 1.6, anchor: .center)
+                .accessibilityLabel("Monthly fulfillment progress")
+                .accessibilityValue("\(fulfilledPercent) percent")
             
             // Sub-metrics Split Cards
             HStack(spacing: 12) {
@@ -105,15 +95,14 @@ public struct RevenueTrackerView: View {
                             .font(.footnote)
                             .foregroundColor(Theme.Colors.Status.pendingDark)
                     }
+                    .accessibilityHidden(true)
                     
                     VStack(alignment: .leading, spacing: 1) {
                         Text("In Pipeline")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(Theme.Colors.textSecondary)
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(Color(UIColor.secondaryLabel))
                         Text("$\(pendingRevenue, specifier: "%.2f")")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
+                            .font(.subheadline.weight(.bold))
                             .foregroundColor(Theme.Colors.textDark)
                     }
                     Spacer()
@@ -123,6 +112,8 @@ public struct RevenueTrackerView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Theme.Colors.warmIvory)
                 )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("In pipeline revenue: $\(String(format: "%.2f", pendingRevenue))")
                 
                 // Delivered Metric
                 HStack(spacing: 10) {
@@ -135,15 +126,14 @@ public struct RevenueTrackerView: View {
                             .font(.footnote)
                             .foregroundColor(Theme.Colors.Status.deliveredDark)
                     }
+                    .accessibilityHidden(true)
                     
                     VStack(alignment: .leading, spacing: 1) {
                         Text("Delivered")
-                            .font(.caption2)
-                            .fontWeight(.medium)
-                            .foregroundColor(Theme.Colors.textSecondary)
+                            .font(.caption2.weight(.medium))
+                            .foregroundColor(Color(UIColor.secondaryLabel))
                         Text("$\(completedRevenue, specifier: "%.2f")")
-                            .font(.subheadline)
-                            .fontWeight(.bold)
+                            .font(.subheadline.weight(.bold))
                             .foregroundColor(Theme.Colors.textDark)
                     }
                     Spacer()
@@ -153,6 +143,8 @@ public struct RevenueTrackerView: View {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
                         .fill(Theme.Colors.warmIvory)
                 )
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("Delivered revenue: $\(String(format: "%.2f", completedRevenue))")
             }
         }
         .padding(16)

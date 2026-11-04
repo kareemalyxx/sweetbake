@@ -10,6 +10,7 @@ import PhotosUI
 struct OrderEntryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     // Order editing state if modifying existing, or nil for new
     var orderToEdit: Order?
@@ -57,9 +58,11 @@ struct OrderEntryView: View {
                         Image(systemName: "person.crop.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.roseGold)
-                            .font(.system(size: 20))
+                            .font(.title3)
+                            .accessibilityHidden(true)
                         TextField("Customer Full Name", text: $customerName)
                             .textContentType(.name)
+                            .font(.body)
                     }
                     
                     VStack(alignment: .leading, spacing: 10) {
@@ -90,18 +93,21 @@ struct OrderEntryView: View {
                             Text(type).tag(type)
                         }
                     }
+                    .font(.body)
                     
                     Picker("Shape", selection: $shape) {
                         ForEach(shapes, id: \.self) { item in
                             Text(item).tag(item)
                         }
                     }
+                    .font(.body)
                     
                     Picker("Flavor & Filling", selection: $flavor) {
                         ForEach(flavors, id: \.self) { item in
                             Text(item).tag(item)
                         }
                     }
+                    .font(.body)
                 } header: {
                     Text("Cake Specifications")
                         .font(.footnote.weight(.semibold))
@@ -122,11 +128,12 @@ struct OrderEntryView: View {
                         Label("Quoted Price", systemImage: "dollarsign.circle.fill")
                             .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.roseGold)
+                            .font(.body)
                         Spacer()
                         TextField("Price", value: $quotedPrice, format: .currency(code: "USD"))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
-                            .fontWeight(.semibold)
+                            .font(.body.weight(.semibold))
                     }
                 } header: {
                     Text("Status & Financials")
@@ -143,7 +150,7 @@ struct OrderEntryView: View {
                     ) {
                         HStack(spacing: 12) {
                             Image(systemName: "photo.badge.plus")
-                                .font(.system(size: 18))
+                                .font(.body)
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
                             Text(referenceImages.isEmpty ? "Attach Sketches or Inspo Photos" : "Add / Replace Photos")
@@ -155,9 +162,11 @@ struct OrderEntryView: View {
                             } else {
                                 Text("\(referenceImages.count)/5")
                                     .font(.caption)
-                                    .foregroundColor(Theme.textSecondary)
+                                    .foregroundColor(Color(UIColor.secondaryLabel))
                             }
                         }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .onChange(of: selectedPhotoItems) { _, newItems in
                         loadPhotos(from: newItems)
@@ -179,18 +188,26 @@ struct OrderEntryView: View {
                                                         .stroke(Theme.pastelRose, lineWidth: 1.5)
                                                 )
                                             
+                                            // Photo removal button with 44x44pt hit target
                                             Button(action: {
-                                                withAnimation {
+                                                if reduceMotion {
                                                     _ = referenceImages.remove(at: index)
+                                                } else {
+                                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                                        _ = referenceImages.remove(at: index)
+                                                    }
                                                 }
                                             }) {
                                                 Image(systemName: "xmark.circle.fill")
                                                     .symbolRenderingMode(.hierarchical)
                                                     .foregroundColor(Theme.textDark)
                                                     .background(Circle().fill(Color(UIColor.secondarySystemGroupedBackground)))
-                                                    .font(.system(size: 18))
+                                                    .font(.title3)
+                                                    .frame(minWidth: 44, minHeight: 44)
+                                                    .contentShape(Rectangle())
                                             }
-                                            .offset(x: 6, y: -6)
+                                            .offset(x: 10, y: -10)
+                                            .accessibilityLabel("Remove image \(index + 1)")
                                         }
                                         .padding(.top, 6)
                                     }
@@ -210,7 +227,7 @@ struct OrderEntryView: View {
                     ZStack(alignment: .topLeading) {
                         if customRequirements.isEmpty {
                             Text("e.g. Edible gold leaf on top edge, gluten-free base, message 'Happy 30th Sophia' written in mauve script...")
-                                .foregroundColor(Theme.textSecondary.opacity(0.7))
+                                .foregroundColor(Color(UIColor.placeholderText))
                                 .padding(.top, 8)
                                 .font(.subheadline)
                         }
@@ -236,14 +253,16 @@ struct OrderEntryView: View {
                         dismiss()
                     }
                     .foregroundColor(Theme.textMauve)
+                    .frame(minWidth: 44, minHeight: 44)
                 }
                 
                 ToolbarItem(placement: .confirmationAction) {
                     Button(orderToEdit == nil ? "Save Order" : "Update") {
                         saveOrder()
                     }
-                    .font(.system(size: 16, weight: .bold, design: .rounded))
+                    .font(.body.weight(.bold))
                     .foregroundColor(Theme.deepRose)
+                    .frame(minWidth: 44, minHeight: 44)
                     .disabled(customerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }

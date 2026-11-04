@@ -1,7 +1,9 @@
 import SwiftUI
 
-// MARK: - Premium Native iOS Dashboard View
+// MARK: - Premium Native iOS Dashboard View (HIG & Accessibility Compliant)
 public struct DashboardView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
     @Binding public var orders: [Order]
     @State private var selectedFilter: OrderStatus? = nil
     @State private var showingOrderEntry = false
@@ -51,7 +53,7 @@ public struct DashboardView: View {
                     statusFilterBar
                         .padding(.horizontal, 16)
                     
-                    // 4. Active Date Filter Pill
+                    // 4. Active Date Filter Banner
                     if let activeDate = selectedDateFilter {
                         activeDateBanner(for: activeDate)
                             .padding(.horizontal, 16)
@@ -76,8 +78,11 @@ public struct DashboardView: View {
                         Label("New Order", systemImage: "plus")
                             .symbolRenderingMode(.hierarchical)
                             .fontWeight(.semibold)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(Rectangle())
                     }
                     .tint(Theme.Colors.deepRose)
+                    .accessibilityLabel("Create New Cake Order")
                 }
             }
             .sheet(isPresented: $showingOrderEntry) {
@@ -89,7 +94,7 @@ public struct DashboardView: View {
         }
     }
     
-    // MARK: - Status Filter Bar (Native Segmented Chips)
+    // MARK: - Status Filter Bar (Native Segmented Chips with 44pt Touch Targets)
     private var statusFilterBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -99,7 +104,7 @@ public struct DashboardView: View {
                     isSelected: selectedFilter == nil
                 ) {
                     HapticManager.selection()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                    applyFilterAnimation {
                         selectedFilter = nil
                     }
                 }
@@ -112,11 +117,22 @@ public struct DashboardView: View {
                         isSelected: selectedFilter == status
                     ) {
                         HapticManager.selection()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        applyFilterAnimation {
                             selectedFilter = (selectedFilter == status) ? nil : status
                         }
                     }
                 }
+            }
+            .padding(.vertical, 2)
+        }
+    }
+    
+    private func applyFilterAnimation(_ block: () -> Void) {
+        if reduceMotion {
+            block()
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                block()
             }
         }
     }
@@ -129,26 +145,30 @@ public struct DashboardView: View {
                 .font(.subheadline)
             
             Text("Filtering for \(date.formatted(.dateTime.weekday(.wide).month().day()))")
-                .font(.subheadline)
-                .fontWeight(.medium)
+                .font(.subheadline.weight(.medium))
                 .foregroundColor(Theme.Colors.textDark)
             
             Spacer()
             
+            // 44x44pt Touch Target for Clear Filter
             Button {
                 HapticManager.light()
-                withAnimation {
+                applyFilterAnimation {
                     selectedDateFilter = nil
                 }
             } label: {
                 Image(systemName: "xmark.circle.fill")
                     .symbolRenderingMode(.hierarchical)
-                    .foregroundColor(Theme.Colors.textSecondary)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
                     .font(.body)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Clear date filter")
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(Theme.Colors.lavenderLight)
@@ -179,9 +199,11 @@ public struct DashboardView: View {
                             deleteOrder(order)
                         }
                     )
+                    .contentShape(Rectangle())
                     .onTapGesture {
                         orderToEdit = order
                     }
+                    .accessibilityHint("Double tap to view or edit order details")
                 }
             }
         }
@@ -190,20 +212,28 @@ public struct DashboardView: View {
     private func advanceStatus(for order: Order) {
         guard let index = orders.firstIndex(where: { $0.id == order.id }) else { return }
         HapticManager.medium()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        if reduceMotion {
             orders[index].status = orders[index].status.next
+        } else {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                orders[index].status = orders[index].status.next
+            }
         }
     }
     
     private func deleteOrder(_ order: Order) {
         HapticManager.light()
-        withAnimation(.easeOut(duration: 0.25)) {
+        if reduceMotion {
             orders.removeAll { $0.id == order.id }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                orders.removeAll { $0.id == order.id }
+            }
         }
     }
 }
 
-// MARK: - Filter Chip Component
+// MARK: - Filter Chip Component (44pt Minimum Touch Target)
 struct FilterChip: View {
     let title: String
     let count: Int
@@ -214,12 +244,10 @@ struct FilterChip: View {
         Button(action: action) {
             HStack(spacing: 6) {
                 Text(title)
-                    .font(.subheadline)
-                    .fontWeight(isSelected ? .bold : .medium)
+                    .font(.subheadline.weight(isSelected ? .bold : .medium))
                 
                 Text("\(count)")
-                    .font(.caption2)
-                    .fontWeight(.bold)
+                    .font(.caption2.weight(.bold))
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(
@@ -229,7 +257,7 @@ struct FilterChip: View {
                     .foregroundColor(isSelected ? .white : Theme.Colors.deepRose)
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, 8)
+            .frame(minHeight: 44)
             .background(
                 Capsule()
                     .fill(isSelected ? Theme.Colors.deepRose : Theme.Colors.secondaryBackground)
@@ -239,7 +267,11 @@ struct FilterChip: View {
                 Capsule()
                     .stroke(isSelected ? Color.clear : Theme.Colors.border, lineWidth: 1)
             )
+            .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title) filter, \(count) orders")
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
     }
 }

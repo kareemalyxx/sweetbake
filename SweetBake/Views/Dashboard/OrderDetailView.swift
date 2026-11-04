@@ -9,6 +9,7 @@ import SwiftData
 struct OrderDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     
     @Bindable var order: Order
     @State private var showingEditSheet = false
@@ -17,7 +18,7 @@ struct OrderDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                // Header Hero
+                // Header Hero Card
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         StatusPillView(status: order.status)
@@ -35,9 +36,10 @@ struct OrderDetailView: View {
                         Image(systemName: "calendar.badge.clock")
                             .symbolRenderingMode(.hierarchical)
                             .foregroundColor(Theme.deepRose)
+                            .font(.subheadline)
                         Text(order.deliveryDate.formatted(date: .complete, time: .shortened))
                             .font(.subheadline.weight(.medium))
-                            .foregroundColor(Theme.textSecondary)
+                            .foregroundColor(Color(UIColor.secondaryLabel))
                     }
                 }
                 .padding(16)
@@ -109,6 +111,7 @@ struct OrderDetailView: View {
                             Image(systemName: "note.text")
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
+                                .font(.headline)
                             Text("Custom Requirements & Notes")
                                 .font(.headline.weight(.bold))
                                 .foregroundColor(Theme.textDark)
@@ -138,13 +141,14 @@ struct OrderDetailView: View {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .symbolRenderingMode(.hierarchical)
                                 .foregroundColor(Theme.deepRose)
+                                .font(.headline)
                             Text("Reference Photos & Sketches")
                                 .font(.headline.weight(.bold))
                                 .foregroundColor(Theme.textDark)
                             Spacer()
                             Text("\(order.referenceImages.count) attached")
                                 .font(.caption)
-                                .foregroundColor(Theme.textSecondary)
+                                .foregroundColor(Color(UIColor.secondaryLabel))
                         }
                         
                         ScrollView(.horizontal, showsIndicators: false) {
@@ -199,8 +203,11 @@ struct OrderDetailView: View {
                 } label: {
                     Image(systemName: "ellipsis.circle")
                         .foregroundColor(Theme.roseGold)
-                        .font(.system(size: 18))
+                        .font(.title3)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Order options")
             }
         }
         .sheet(isPresented: $showingEditSheet) {
@@ -229,13 +236,14 @@ private struct DetailRow: View {
         HStack {
             Image(systemName: icon)
                 .symbolRenderingMode(.hierarchical)
-                .font(.system(size: 14))
+                .font(.footnote)
                 .foregroundColor(Theme.softLilac)
-                .frame(width: 22)
+                .frame(width: 24)
+                .accessibilityHidden(true)
             
             Text(title)
                 .font(.subheadline)
-                .foregroundColor(Theme.textSecondary)
+                .foregroundColor(Color(UIColor.secondaryLabel))
             
             Spacer()
             
@@ -243,7 +251,9 @@ private struct DetailRow: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(Theme.textDark)
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(value)")
     }
 }
 

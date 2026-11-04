@@ -1,7 +1,9 @@
 import SwiftUI
 
-// MARK: - Premium Native iOS Business Needs & Checklist View
+// MARK: - Premium Native iOS Business Needs & Checklist View (HIG & Accessibility Compliant)
 public struct BusinessNeedsView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
     @Binding public var requirements: [GeneralRequirement]
     @State private var selectedCategory: RequirementCategory = .addons
     @State private var newItemTitle: String = ""
@@ -20,10 +22,10 @@ public struct BusinessNeedsView: View {
     public var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                // Category Pills Segmented Selector
+                // Category Pills Segmented Selector with 44pt Touch Targets
                 categorySelectorBar
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 8)
                     .background(Theme.Colors.secondaryBackground)
                 
                 Divider()
@@ -72,20 +74,25 @@ public struct BusinessNeedsView: View {
                     if hasCompleted {
                         Button("Clear Done") {
                             HapticManager.light()
-                            withAnimation {
+                            if reduceMotion {
                                 requirements.removeAll { $0.category == selectedCategory && $0.isCompleted }
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    requirements.removeAll { $0.category == selectedCategory && $0.isCompleted }
+                                }
                             }
                         }
                         .tint(Theme.Colors.deepRose)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+                        .font(.subheadline.weight(.semibold))
+                        .frame(minWidth: 44, minHeight: 44)
+                        .accessibilityLabel("Clear completed checklist items")
                     }
                 }
             }
         }
     }
     
-    // MARK: - Category Selector Bar
+    // MARK: - Category Selector Bar (44pt Minimum Height)
     private var categorySelectorBar: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
@@ -95,8 +102,12 @@ public struct BusinessNeedsView: View {
                     
                     Button {
                         HapticManager.selection()
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+                        if reduceMotion {
                             selectedCategory = cat
+                        } else {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedCategory = cat
+                            }
                         }
                     } label: {
                         HStack(spacing: 6) {
@@ -105,13 +116,11 @@ public struct BusinessNeedsView: View {
                                 .font(.caption)
                             
                             Text(cat.rawValue)
-                                .font(.subheadline)
-                                .fontWeight(isSelected ? .bold : .medium)
+                                .font(.subheadline.weight(isSelected ? .bold : .medium))
                             
                             if pendingCount > 0 {
                                 Text("\(pendingCount)")
-                                    .font(.caption2)
-                                    .fontWeight(.bold)
+                                    .font(.caption2.weight(.bold))
                                     .padding(.horizontal, 6)
                                     .padding(.vertical, 2)
                                     .background(Capsule().fill(isSelected ? Color.white.opacity(0.3) : Theme.Colors.blushPink))
@@ -119,16 +128,21 @@ public struct BusinessNeedsView: View {
                             }
                         }
                         .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
+                        .frame(minHeight: 44)
                         .background(
                             Capsule()
                                 .fill(isSelected ? Theme.Colors.deepRose : Theme.Colors.warmIvory)
                         )
                         .foregroundColor(isSelected ? .white : Theme.Colors.textDark)
+                        .contentShape(Capsule())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityLabel("\(cat.rawValue) category, \(pendingCount) items pending")
+                    .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
                 }
             }
+            .padding(.vertical, 2)
         }
     }
     
@@ -139,6 +153,7 @@ public struct BusinessNeedsView: View {
                 .symbolRenderingMode(.hierarchical)
                 .foregroundColor(Theme.Colors.deepRose)
                 .font(.body)
+                .accessibilityHidden(true)
             
             TextField("Add \(selectedCategory.rawValue.lowercased()) requirement...", text: $newItemTitle)
                 .font(.subheadline)
@@ -151,10 +166,14 @@ public struct BusinessNeedsView: View {
                         .symbolRenderingMode(.multicolor)
                         .font(.title2)
                         .foregroundColor(Theme.Colors.deepRose)
+                        .frame(minWidth: 44, minHeight: 44)
+                        .contentShape(Rectangle())
                 }
+                .accessibilityLabel("Add to-do item")
             }
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Theme.Colors.secondaryBackground)
@@ -172,9 +191,8 @@ public struct BusinessNeedsView: View {
         
         return HStack {
             Text("\(uncompleted) to do • \(completed) completed")
-                .font(.caption)
-                .fontWeight(.medium)
-                .foregroundColor(Theme.Colors.textSecondary)
+                .font(.caption.weight(.medium))
+                .foregroundColor(Color(UIColor.secondaryLabel))
             Spacer()
         }
     }
@@ -183,7 +201,7 @@ public struct BusinessNeedsView: View {
         let trimmed = newItemTitle.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
         HapticManager.light()
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+        if reduceMotion {
             requirements.insert(
                 GeneralRequirement(
                     title: trimmed,
@@ -192,27 +210,47 @@ public struct BusinessNeedsView: View {
                 at: 0
             )
             newItemTitle = ""
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                requirements.insert(
+                    GeneralRequirement(
+                        title: trimmed,
+                        category: selectedCategory
+                    ),
+                    at: 0
+                )
+                newItemTitle = ""
+            }
         }
     }
     
     private func toggleRequirement(_ item: GeneralRequirement) {
         guard let index = requirements.firstIndex(where: { $0.id == item.id }) else { return }
         HapticManager.medium()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
+        if reduceMotion {
             requirements[index].isCompleted.toggle()
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                requirements[index].isCompleted.toggle()
+            }
         }
     }
     
     private func deleteRequirement(at offsets: IndexSet) {
         HapticManager.light()
-        withAnimation {
+        if reduceMotion {
             let itemsToDelete = offsets.map { filteredItems[$0].id }
             requirements.removeAll { itemsToDelete.contains($0.id) }
+        } else {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                let itemsToDelete = offsets.map { filteredItems[$0].id }
+                requirements.removeAll { itemsToDelete.contains($0.id) }
+            }
         }
     }
 }
 
-// MARK: - Requirement Row View
+// MARK: - Requirement Row View (Accessible Checkbox with 44pt Touch Target)
 struct RequirementRow: View {
     let item: GeneralRequirement
     let onToggle: () -> Void
@@ -223,27 +261,32 @@ struct RequirementRow: View {
                 Image(systemName: item.isCompleted ? "checkmark.circle.fill" : "circle")
                     .symbolRenderingMode(item.isCompleted ? .hierarchical : .monochrome)
                     .font(.title3)
-                    .foregroundColor(item.isCompleted ? Theme.Colors.Status.deliveredDark : Theme.Colors.pastelRose)
+                    .foregroundColor(item.isCompleted ? Color(UIColor.systemGreen) : Theme.Colors.pastelRose)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(item.title)
+            .accessibilityValue(item.isCompleted ? "Completed" : "Incomplete")
+            .accessibilityHint("Double tap to toggle completion status")
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.title)
                     .font(.body)
                     .strikethrough(item.isCompleted)
-                    .foregroundColor(item.isCompleted ? Theme.Colors.textSecondary : Theme.Colors.textDark)
+                    .foregroundColor(item.isCompleted ? Color(UIColor.secondaryLabel) : Theme.Colors.textDark)
                 
                 if item.category == .addons {
                     Text("Add-on Item")
-                        .font(.caption2)
-                        .fontWeight(.semibold)
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(Theme.Colors.deepRose)
                 }
             }
             
             Spacer()
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 2)
         .contentShape(Rectangle())
         .onTapGesture(perform: onToggle)
     }

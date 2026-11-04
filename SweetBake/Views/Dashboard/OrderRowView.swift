@@ -1,7 +1,9 @@
 import SwiftUI
 
-// MARK: - Premium Native iOS Order Row View
+// MARK: - Premium Native iOS Order Row View (HIG & Accessibility Compliant)
 public struct OrderRowView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
     public let order: Order
     public let onQuickAdvance: () -> Void
     public let onDelete: () -> Void
@@ -20,6 +22,7 @@ public struct OrderRowView: View {
         HStack(spacing: 14) {
             // Cake Inspiration Thumb / Symbol
             previewThumbnail
+                .accessibilityHidden(true)
             
             // Order Core Details
             VStack(alignment: .leading, spacing: 4) {
@@ -33,15 +36,14 @@ public struct OrderRowView: View {
                     Spacer()
                     
                     Text("$\(order.quotedPrice, specifier: "%.2f")")
-                        .font(.subheadline)
-                        .fontWeight(.bold)
+                        .font(.subheadline.weight(.bold))
                         .foregroundColor(Theme.Colors.deepRose)
                 }
                 
                 // Subtitle: Cake Type & Shape
                 Text("\(order.cakeType) • \(order.shape)")
                     .font(.subheadline)
-                    .foregroundColor(Theme.Colors.textSecondary)
+                    .foregroundColor(Color(UIColor.secondaryLabel))
                     .lineLimit(1)
                 
                 // Due Date & Time
@@ -49,11 +51,11 @@ public struct OrderRowView: View {
                     Image(systemName: "clock")
                         .symbolRenderingMode(.hierarchical)
                         .font(.caption2)
-                        .foregroundColor(Theme.Colors.textSecondary)
+                        .foregroundColor(Color(UIColor.tertiaryLabel))
                     
                     Text(order.deliveryDate.formatted(.dateTime.weekday(.short).month(.abbreviated).day().hour().minute()))
                         .font(.caption)
-                        .foregroundColor(Theme.Colors.textSecondary)
+                        .foregroundColor(Color(UIColor.secondaryLabel))
                 }
                 .padding(.top, 1)
                 
@@ -63,8 +65,7 @@ public struct OrderRowView: View {
                     
                     if !order.flavor.isEmpty {
                         Text(order.flavor)
-                            .font(.caption2)
-                            .fontWeight(.medium)
+                            .font(.caption2.weight(.medium))
                             .padding(.horizontal, 7)
                             .padding(.vertical, 3)
                             .background(Theme.Colors.warmIvory)
@@ -74,13 +75,12 @@ public struct OrderRowView: View {
                     }
                     
                     if !order.addons.isEmpty {
-                        HStack(spacing: 2) {
+                        HStack(spacing: 3) {
                             Image(systemName: "sparkles")
                                 .symbolRenderingMode(.multicolor)
-                                .font(.system(size: 9))
-                            Text("+\(order.addons.count)")
                                 .font(.caption2)
-                                .fontWeight(.bold)
+                            Text("+\(order.addons.count)")
+                                .font(.caption2.weight(.bold))
                         }
                         .padding(.horizontal, 6)
                         .padding(.vertical, 3)
@@ -94,7 +94,7 @@ public struct OrderRowView: View {
                 .padding(.top, 4)
             }
             
-            // Quick Advance Action Button
+            // Quick Advance Action Button (Guaranteed 44x44pt Touch Target)
             if order.status != .delivered {
                 Button(action: onQuickAdvance) {
                     VStack(spacing: 3) {
@@ -104,16 +104,19 @@ public struct OrderRowView: View {
                             .foregroundColor(Theme.Colors.deepRose)
                         
                         Text(order.status.next.actionTitle)
-                            .font(.system(size: 9, weight: .bold))
+                            .font(.caption2.weight(.bold))
                             .foregroundColor(Theme.Colors.deepRose)
                     }
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 8)
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Advance status to \(order.status.next.rawValue)")
+                .accessibilityHint("Double tap to progress this order")
             }
         }
         .padding(14)
+        // High-frequency list row: opaque semantic card (never glass/translucent materials)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Theme.Colors.secondaryBackground)

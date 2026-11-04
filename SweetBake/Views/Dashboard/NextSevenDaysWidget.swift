@@ -1,7 +1,9 @@
 import SwiftUI
 
-// MARK: - Premium Native iOS Next 7 Days Rush Widget
+// MARK: - Premium Native iOS Next 7 Days Rush Widget (HIG & Accessibility Compliant)
 public struct NextSevenDaysWidget: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    
     public let orders: [Order]
     @Binding public var selectedDateFilter: Date?
     
@@ -34,9 +36,8 @@ public struct NextSevenDaysWidget: View {
                 Spacer()
                 
                 Text("Tap day to filter")
-                    .font(.caption2)
-                    .fontWeight(.medium)
-                    .foregroundColor(Theme.Colors.textSecondary)
+                    .font(.caption2.weight(.medium))
+                    .foregroundColor(Color(UIColor.secondaryLabel))
             }
             
             // 7 Days Timeline Horizontal Carousel
@@ -53,11 +54,12 @@ public struct NextSevenDaysWidget: View {
                             isSelected: isSelected
                         ) {
                             HapticManager.selection()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.75)) {
-                                if isSelected {
-                                    selectedDateFilter = nil
-                                } else {
-                                    selectedDateFilter = date
+                            // Respect Accessibility Reduce Motion
+                            if reduceMotion {
+                                toggleDateFilter(date: date, isSelected: isSelected)
+                            } else {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    toggleDateFilter(date: date, isSelected: isSelected)
                                 }
                             }
                         }
@@ -78,6 +80,14 @@ public struct NextSevenDaysWidget: View {
         .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
     }
     
+    private func toggleDateFilter(date: Date, isSelected: Bool) {
+        if isSelected {
+            selectedDateFilter = nil
+        } else {
+            selectedDateFilter = date
+        }
+    }
+    
     private func countForDate(_ date: Date) -> Int {
         let calendar = Calendar.current
         return orders.filter { calendar.isDate($0.deliveryDate, inSameDayAs: date) }.count
@@ -95,32 +105,38 @@ struct DayTimelineCard: View {
         Calendar.current.isDateInToday(date)
     }
     
+    private var dateAccessibilityLabel: String {
+        let dayString = isToday ? "Today" : date.formatted(.dateTime.weekday(.wide))
+        let dateNumber = date.formatted(.dateTime.month(.wide).day())
+        let countString = orderCount == 1 ? "1 cake order" : "\(orderCount) cake orders"
+        return "\(dayString), \(dateNumber). \(countString)."
+    }
+    
     var body: some View {
         Button(action: action) {
             VStack(spacing: 6) {
                 // Day of Week
                 Text(isToday ? "Today" : date.formatted(.dateTime.weekday(.short)))
-                    .font(.caption2)
-                    .fontWeight(isSelected || isToday ? .bold : .medium)
-                    .foregroundColor(isSelected ? .white : (isToday ? Theme.Colors.deepRose : Theme.Colors.textSecondary))
+                    .font(.caption2.weight(isSelected || isToday ? .bold : .medium))
+                    .foregroundColor(isSelected ? .white : (isToday ? Theme.Colors.deepRose : Color(UIColor.secondaryLabel)))
                 
                 // Day of Month Number
                 Text(date.formatted(.dateTime.day()))
-                    .font(.title3)
-                    .fontWeight(.bold)
+                    .font(.title3.weight(.bold))
                     .foregroundColor(isSelected ? .white : Theme.Colors.textDark)
                 
                 // Order count pill
                 Text("\(orderCount)")
-                    .font(.system(size: 10, weight: .heavy))
-                    .padding(.horizontal, 6)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 7)
                     .padding(.vertical, 2)
                     .background(
                         Capsule()
                             .fill(isSelected ? Color.white.opacity(0.3) : (orderCount > 0 ? Theme.Colors.blushPink : Theme.Colors.warmIvory))
                     )
-                    .foregroundColor(isSelected ? .white : (orderCount > 0 ? Theme.Colors.deepRose : Theme.Colors.textSecondary))
+                    .foregroundColor(isSelected ? .white : (orderCount > 0 ? Theme.Colors.deepRose : Color(UIColor.secondaryLabel)))
             }
+            // 58x86pt comfortably exceeds Apple's 44x44pt touch target rule
             .frame(width: 58, height: 86)
             .background(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -128,9 +144,14 @@ struct DayTimelineCard: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(isSelected ? Color.clear : (isToday ? Theme.Colors.deepRose.opacity(0.5) : Color.clear), lineWidth: 1.5)
+                    .stroke(isSelected ? Color.clear : (isToday ? Theme.Colors.deepRose.opacity(0.6) : Color.clear), lineWidth: 1.5)
             )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(dateAccessibilityLabel)
+        .accessibilityAddTraits(isSelected ? [.isSelected, .isButton] : [.isButton])
+        .accessibilityHint(isSelected ? "Double tap to clear date filter" : "Double tap to filter orders for this day")
     }
 }
