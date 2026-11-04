@@ -16,7 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming } from '../types';
+import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming, OrderExpense } from '../types';
 import { Theme } from '../theme';
 import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
 import { StorageService } from '../services/storage';
@@ -59,6 +59,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   // Financials
   const [totalPaymentStr, setTotalPaymentStr] = useState('85');
   const [downPaymentStr, setDownPaymentStr] = useState('0');
+
+  // Expenses
+  const [expenses, setExpenses] = useState<OrderExpense[]>([]);
+  const [expenseAmountStr, setExpenseAmountStr] = useState('');
+  const [expenseNotes, setExpenseNotes] = useState('');
+  const [showAddExpense, setShowAddExpense] = useState(false);
 
   // Reminders
   const [reminderEnabled, setReminderEnabled] = useState(false);
@@ -135,6 +141,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       }
       setTotalPaymentStr(String(orderToEdit.quotedPrice ?? 85));
       setDownPaymentStr(String(orderToEdit.downPayment ?? 0));
+      setExpenses(orderToEdit.expenses || []);
       setFulfillmentType(orderToEdit.fulfillmentType || 'Pickup');
       setLocation(orderToEdit.location || '');
       setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
@@ -151,6 +158,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setSelectedAddons({});
       setTotalPaymentStr('85');
       setDownPaymentStr('0');
+      setExpenses([]);
+      setExpenseAmountStr('');
+      setExpenseNotes('');
+      setShowAddExpense(false);
       setFulfillmentType('Pickup');
       setLocation('');
       setReminderEnabled(false);
@@ -166,10 +177,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setShowTimePicker(false);
   }, [orderToEdit, initialDate, visible]);
 
-  // Calculated remaining payment
+  // Calculated remaining payment & profit after expenses
   const totalVal = Math.max(0, parseFloat(totalPaymentStr) || 0);
   const downVal = Math.max(0, parseFloat(downPaymentStr) || 0);
   const remainingVal = Math.max(0, totalVal - downVal);
+  const totalExpensesVal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+  const estimatedProfitVal = totalVal - totalExpensesVal;
 
   // Handle native Date change
   const onDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
@@ -364,6 +377,30 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const handleAddExpense = () => {
+    const amt = parseFloat(expenseAmountStr);
+    if (isNaN(amt) || amt <= 0) {
+      Alert.alert('Invalid Amount', 'Please enter a valid expense amount.');
+      return;
+    }
+    triggerHaptic.success();
+    const newExpense: OrderExpense = {
+      id: `exp-${Date.now()}`,
+      amount: amt,
+      notes: expenseNotes.trim() || 'Supplies / Ingredients',
+      date: new Date().toISOString(),
+    };
+    setExpenses([...expenses, newExpense]);
+    setExpenseAmountStr('');
+    setExpenseNotes('');
+    setShowAddExpense(false);
+  };
+
+  const handleRemoveExpense = (id: string) => {
+    triggerHaptic.light();
+    setExpenses(expenses.filter((e) => e.id !== id));
+  };
+
   const handleSave = () => {
     if (!customerName.trim()) {
       Alert.alert('Customer Name Required', 'Please enter the client or customer name.');
@@ -382,6 +419,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       quotedPrice: totalVal,
       downPayment: downVal,
       remainingPayment: remainingVal,
+      expenses,
       fulfillmentType,
       location: location.trim(),
       reminderEnabled,
@@ -974,6 +1012,115 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                     </View>
                   </View>
                 </View>
+
+                {/* Net Profit Summary */}
+                <View style={styles.profitSummaryCard}>
+                  <View style={styles.remainingRow}>
+                    <View style={styles.remainingInfo}>
+                      <Text style={styles.profitLabel}>Estimated Net Profit</Text>
+                      <Text style={styles.profitFormula}>
+                        Total (${totalVal.toFixed(2)}) - Expenses (${totalExpensesVal.toFixed(2)})
+                      </Text>
+                    </View>
+                    <View style={[
+                      styles.profitPill,
+                      estimatedProfitVal >= 0 ? styles.profitPillPositive : styles.profitPillNegative,
+                    ]}>
+                      <Ionicons
+                        name={estimatedProfitVal >= 0 ? 'trending-up' : 'trending-down'}
+                        size={14}
+                        color={estimatedProfitVal >= 0 ? '#1B5E20' : '#B71C1C'}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={[
+                        styles.profitText,
+                        estimatedProfitVal >= 0 ? styles.profitTextPositive : styles.profitTextNegative,
+                      ]}>
+                        ${estimatedProfitVal.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              {/* Order Specific Expenses Section */}
+              <View style={styles.expensesCard}>
+                <View style={styles.titleWithAction}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="receipt-outline" size={15} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
+                    <Text style={styles.expensesSectionTitle}>Order Expenses ({expenses.length})</Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setShowAddExpense(!showAddExpense)}
+                    style={styles.inlineAddBtn}
+                  >
+                    <Ionicons name={showAddExpense ? 'close-circle' : 'add-circle'} size={14} color={Theme.colors.deepRose} />
+                    <Text style={styles.inlineAddText}>{showAddExpense ? 'Cancel' : 'Add Expense'}</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {showAddExpense && (
+                  <View style={styles.expenseFormBox}>
+                    <Text style={styles.expenseInputLabel}>Amount Paid ($)</Text>
+                    <View style={styles.currencyInputRow}>
+                      <Text style={styles.currencySymbol}>$</Text>
+                      <TextInput
+                        style={styles.currencyInput}
+                        placeholder="0.00"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        keyboardType="decimal-pad"
+                        value={expenseAmountStr}
+                        onChangeText={setExpenseAmountStr}
+                      />
+                    </View>
+
+                    <Text style={[styles.expenseInputLabel, { marginTop: 10 }]}>Expense Notes</Text>
+                    <TextInput
+                      style={styles.expenseNotesInput}
+                      placeholder="e.g. Fondant, Cake Board, Fresh Berries"
+                      placeholderTextColor={Theme.colors.textSecondary}
+                      value={expenseNotes}
+                      onChangeText={setExpenseNotes}
+                    />
+
+                    <TouchableOpacity style={styles.saveExpenseBtn} onPress={handleAddExpense}>
+                      <Ionicons name="checkmark" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.saveExpenseBtnText}>Save Expense</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {expenses.length > 0 ? (
+                  <View style={styles.expensesList}>
+                    {expenses.map((exp) => (
+                      <View key={exp.id} style={styles.expenseItemRow}>
+                        <View style={styles.expenseItemInfo}>
+                          <Text style={styles.expenseItemNotes}>{exp.notes}</Text>
+                          <Text style={styles.expenseItemDate}>
+                            {new Date(exp.date).toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: 'numeric',
+                              minute: '2-digit',
+                            })}
+                          </Text>
+                        </View>
+                        <View style={styles.expenseItemRight}>
+                          <Text style={styles.expenseItemAmount}>-${exp.amount.toFixed(2)}</Text>
+                          <TouchableOpacity
+                            onPress={() => handleRemoveExpense(exp.id)}
+                            style={styles.expenseRemoveBtn}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="trash-outline" size={14} color={Theme.colors.deepRose} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.emptyExpensesText}>No expenses logged yet for this order.</Text>
+                )}
               </View>
             </View>
 
@@ -1497,6 +1644,140 @@ const styles = StyleSheet.create({
   },
   remainingTextDue: {
     color: Theme.colors.deepRose,
+  },
+  profitSummaryCard: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: Theme.colors.border,
+  },
+  profitLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  profitFormula: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  profitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+  profitPillPositive: {
+    backgroundColor: '#E8F5E9',
+  },
+  profitPillNegative: {
+    backgroundColor: '#FFEBEE',
+  },
+  profitText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  profitTextPositive: {
+    color: '#2E7D32',
+  },
+  profitTextNegative: {
+    color: '#C62828',
+  },
+  expensesCard: {
+    backgroundColor: Theme.colors.white,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginTop: 12,
+  },
+  expensesSectionTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  expenseFormBox: {
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 12,
+    padding: 12,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  expenseInputLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+    marginBottom: 4,
+  },
+  expenseNotesInput: {
+    backgroundColor: Theme.colors.white,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: Theme.colors.textDark,
+  },
+  saveExpenseBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.deepRose,
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  saveExpenseBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  expensesList: {
+    marginTop: 10,
+  },
+  expenseItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Theme.colors.cream,
+  },
+  expenseItemInfo: {
+    flex: 1,
+    marginRight: 8,
+  },
+  expenseItemNotes: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  expenseItemDate: {
+    fontSize: 10,
+    color: Theme.colors.textSecondary,
+    marginTop: 2,
+  },
+  expenseItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  expenseItemAmount: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#C62828',
+  },
+  expenseRemoveBtn: {
+    padding: 4,
+  },
+  emptyExpensesText: {
+    fontSize: 12,
+    color: Theme.colors.textSecondary,
+    fontStyle: 'italic',
+    marginTop: 8,
   },
   addPhotosBtn: {
     flexDirection: 'row',

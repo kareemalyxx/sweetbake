@@ -33,6 +33,8 @@ export const OrderRow: React.FC<OrderRowProps> = ({
   };
 
   const remaining = order.remainingPayment ?? Math.max(0, order.quotedPrice - (order.downPayment || 0));
+  const totalExpenses = (order.expenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
+  const profit = order.quotedPrice - totalExpenses;
 
   return (
     <TouchableOpacity
@@ -135,6 +137,26 @@ export const OrderRow: React.FC<OrderRowProps> = ({
                 })()}
               </View>
             ) : null}
+
+            {totalExpenses > 0 && (
+              <View style={styles.profitPill}>
+                <Ionicons
+                  name={profit >= 0 ? 'trending-up' : 'trending-down'}
+                  size={10}
+                  color={profit >= 0 ? '#2E7D32' : '#C62828'}
+                  style={{ marginRight: 3 }}
+                />
+                <Text
+                  style={[
+                    styles.profitPillText,
+                    { color: profit >= 0 ? '#2E7D32' : '#C62828' },
+                  ]}
+                  numberOfLines={1}
+                >
+                  ${profit.toFixed(0)} profit
+                </Text>
+              </View>
+            )}
 
             {order.reminderEnabled && (
               <View style={styles.reminderBadge}>
@@ -312,6 +334,20 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: Theme.colors.deepRose,
+  },
+  profitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F8E9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#C8E6C9',
+  },
+  profitPillText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   reminderBadge: {
     backgroundColor: Theme.colors.lavenderLight,

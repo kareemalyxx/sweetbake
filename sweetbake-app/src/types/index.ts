@@ -4,6 +4,13 @@ export type FulfillmentType = 'Pickup' | 'Delivery';
 
 export type ReminderTiming = 'on_time' | '15_min' | '1_hour' | '2_hours' | '1_day';
 
+export interface OrderExpense {
+  id: string;
+  amount: number; // Amount paid
+  notes: string; // Description/purpose (e.g., 'Specialty fondant', 'Edible flowers')
+  date: string; // When expense was paid (ISO string)
+}
+
 export interface CakeOrder {
   id: string;
   customerName: string;
@@ -17,6 +24,7 @@ export interface CakeOrder {
   quotedPrice: number;
   downPayment?: number; // Down payment paid in advance
   remainingPayment?: number; // Calculated: quotedPrice - downPayment
+  expenses?: OrderExpense[]; // Expenses incurred for this order
   fulfillmentType?: FulfillmentType; // 'Pickup' | 'Delivery'
   location?: string; // Delivery address or Pickup location notes
   reminderEnabled?: boolean; // In-app reminder active

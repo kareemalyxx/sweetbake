@@ -43,6 +43,14 @@ export const RevenueTracker: React.FC<RevenueTrackerProps> = ({ orders, isDarkMo
     .reduce((sum, o) => sum + (o.quotedPrice || 0), 0);
 
   const totalRevenue = pendingRevenue + completedRevenue;
+
+  const totalExpenses = currentMonthOrders.reduce((sum, o) => {
+    const orderExp = (o.expenses || []).reduce((eSum, e) => eSum + (e.amount || 0), 0);
+    return sum + orderExp;
+  }, 0);
+
+  const netProfit = totalRevenue - totalExpenses;
+
   const fulfilledPercent =
     totalRevenue > 0 ? Math.round((completedRevenue / totalRevenue) * 100) : 0;
   const monthName = now.toLocaleString('default', { month: 'long' });
@@ -180,6 +188,23 @@ export const RevenueTracker: React.FC<RevenueTrackerProps> = ({ orders, isDarkMo
             <View>
               <Text style={styles.subLabel}>Delivered</Text>
               <Text style={styles.subValue}>${completedRevenue.toFixed(2)}</Text>
+            </View>
+          </View>
+
+          {/* Net Profit Card */}
+          <View style={styles.subCard}>
+            <View style={[styles.iconCircle, { backgroundColor: netProfit >= 0 ? '#E8F5E9' : '#FFEBEE' }]}>
+              <Ionicons
+                name={netProfit >= 0 ? 'cash-outline' : 'trending-down'}
+                size={13}
+                color={netProfit >= 0 ? '#2E7D32' : '#C62828'}
+              />
+            </View>
+            <View>
+              <Text style={styles.subLabel}>Net Profit</Text>
+              <Text style={[styles.subValue, { color: netProfit >= 0 ? '#2E7D32' : '#C62828' }]}>
+                ${netProfit.toFixed(2)}
+              </Text>
             </View>
           </View>
         </View>

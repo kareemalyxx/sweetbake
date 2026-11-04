@@ -116,7 +116,7 @@ service cloud.firestore {
       let allowed = [
         'id', 'customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
-        'remainingPayment', 'fulfillmentType', 'location', 'reminderEnabled',
+        'remainingPayment', 'expenses', 'fulfillmentType', 'location', 'reminderEnabled',
         'reminderTiming', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
@@ -139,6 +139,7 @@ service cloud.firestore {
         (!('customRequirements' in data) || (data.customRequirements is string && data.customRequirements.size() <= 3000)) &&
         (!('downPayment' in data) || (data.downPayment is number && data.downPayment >= 0 && data.downPayment <= data.quotedPrice)) &&
         (!('remainingPayment' in data) || (data.remainingPayment is number && data.remainingPayment >= 0 && data.remainingPayment <= 1000000)) &&
+        (!('expenses' in data) || (data.expenses is list && data.expenses.size() <= 50)) &&
         (!('fulfillmentType' in data) || data.fulfillmentType in validFulfillment) &&
         (!('location' in data) || (data.location is string && data.location.size() <= 300)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
