@@ -54,18 +54,24 @@ jobs:
           xcodebuild \
             -workspace sweetbakeapp.xcworkspace \
             -scheme sweetbakeapp \
-            -configuration Debug \
+            -configuration Release \
             -destination 'generic/platform=iOS Simulator' \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY="" \
-            build | xcpretty || xcodebuild \
-            -workspace sweetbakeapp.xcworkspace \
-            -scheme sweetbakeapp \
-            -configuration Debug \
-            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             build
+
+      - name: Compress App Bundle
+        working-directory: sweetbake-app/ios
+        run: |
+          cd build/Build/Products/Release-iphonesimulator
+          tar -czvf ../../../../sweetbakeapp.app.tar.gz sweetbakeapp.app
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sweetbakeapp-simulator-build
+          path: sweetbakeapp.app.tar.gz
+          retention-days: 14
 
