@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   FlatList,
+  Alert,
   Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ interface FinancialSheetScreenProps {
   orders: CakeOrder[];
   requirements?: GeneralRequirement[];
   expenses?: OrderExpense[];
+  onDeleteExpense?: (expenseId: string) => void;
 }
 
 type PeriodType = 'Monthly' | 'Weekly';
@@ -38,6 +40,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
   orders,
   requirements = [],
   expenses = [],
+  onDeleteExpense,
 }) => {
   const [period, setPeriod] = useState<PeriodType>('Monthly');
   const [filterType, setFilterType] = useState<FilterType>('All');
@@ -508,6 +511,35 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
                   </View>
                 )}
               </View>
+
+              {/* Delete button for expense entries */}
+              {!isIncome && onDeleteExpense && (
+                <TouchableOpacity
+                  style={styles.deleteExpenseBtn}
+                  onPress={() => {
+                    triggerHaptic.medium();
+                    const rawExpenseId = item.id.replace(/^exp-/, '');
+                    Alert.alert(
+                      'Delete Expense',
+                      `Are you sure you want to delete this expense of $${item.amount.toFixed(2)} (${item.title})?`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete',
+                          style: 'destructive',
+                          onPress: () => {
+                            triggerHaptic.light();
+                            onDeleteExpense(rawExpenseId);
+                          },
+                        },
+                      ]
+                    );
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="trash-outline" size={17} color={Theme.colors.textSecondary} />
+                </TouchableOpacity>
+              )}
             </View>
           );
         }}
@@ -775,6 +807,12 @@ const styles = StyleSheet.create({
   txBadgeRow: {
     marginTop: 5,
     flexDirection: 'row',
+  },
+  deleteExpenseBtn: {
+    padding: 8,
+    marginLeft: 6,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   txBadge: {
     paddingHorizontal: 8,

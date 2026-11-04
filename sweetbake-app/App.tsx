@@ -455,6 +455,17 @@ export default function App() {
     await checkReminders();
   };
 
+  const handleDeleteExpense = async (id: string) => {
+    triggerHaptic.light();
+    const target = expenses.find((e) => e.id === id || e.id === `exp-${id}`);
+    const targetId = target ? target.id : id;
+    const updated = expenses.filter((e) => e.id !== targetId);
+    setExpenses(updated);
+    FirestoreService.deleteExpense(targetId).catch((err) =>
+      console.warn('Failed to delete expense from Firestore:', err)
+    );
+  };
+
   return (
     <SafeAreaView
       style={[
@@ -581,7 +592,12 @@ export default function App() {
           />
         )}
         {activeTab === 'Finances' && (
-          <FinancialSheetScreen orders={orders} requirements={requirements} expenses={expenses} />
+          <FinancialSheetScreen
+            orders={orders}
+            requirements={requirements}
+            expenses={expenses}
+            onDeleteExpense={handleDeleteExpense}
+          />
         )}
         {activeTab === 'Checklist' && (
           <BusinessNeedsScreen
