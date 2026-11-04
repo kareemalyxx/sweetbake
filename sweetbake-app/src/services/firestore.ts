@@ -219,8 +219,7 @@ export const FirestoreService = {
   },
 
   /**
-   * Listen to real-time updates for bakery checklist requirements (only active uncompleted items)
-   * Drastically reduces Firestore reads by ignoring historical completed checklist items.
+   * Listen to real-time updates for bakery checklist requirements
    */
   subscribeToRequirements(
     onSuccess: (reqs: GeneralRequirement[]) => void,
@@ -228,10 +227,8 @@ export const FirestoreService = {
     maxLimit: number = 100
   ): () => void {
     const reqsCol = collection(db, 'requirements');
-    // Query only uncompleted items, limit to active items to keep reads minimal
     const q = query(
       reqsCol,
-      where('isCompleted', '==', false),
       limit(maxLimit)
     );
 
@@ -250,7 +247,7 @@ export const FirestoreService = {
           });
         });
 
-        // Sort descending in-memory to avoid needing composite Firestore index (isCompleted + createdAt)
+        // Sort descending in-memory
         reqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
         AsyncStorage.setItem(REQS_CACHE_KEY, JSON.stringify(reqs)).catch(() => {});
@@ -264,14 +261,13 @@ export const FirestoreService = {
   },
 
   /**
-   * Fetch uncompleted requirements once
+   * Fetch requirements once
    */
   async getRequirements(maxLimit: number = 100): Promise<GeneralRequirement[]> {
     try {
       const reqsCol = collection(db, 'requirements');
       const q = query(
         reqsCol,
-        where('isCompleted', '==', false),
         limit(maxLimit)
       );
       const snapshot = await getDocs(q);

@@ -347,7 +347,10 @@ export default function App() {
     const target = requirements.find((r) => r.id === id || r.reqId === id);
     if (!target) return;
 
-    const newCompletedStatus = !target.isCompleted;
+    // If an expense amount is explicitly provided, it is completing the item (isCompleted: true)
+    const newCompletedStatus = typeof expenseAmount === 'number' && expenseAmount > 0
+      ? true
+      : !target.isCompleted;
     const nowIso = new Date().toISOString();
 
     const updated = requirements.map((r) => {
