@@ -145,6 +145,10 @@ export default function App() {
         remainingPayment: remainingVal,
         fulfillmentType: orderData.fulfillmentType || 'Pickup',
         location: orderData.location || '',
+        deliveryCost: orderData.deliveryCost,
+        deliveryPerson: orderData.deliveryPerson,
+        deliveryPhone: orderData.deliveryPhone,
+        deliveryHandoverTime: orderData.deliveryHandoverTime,
         reminderEnabled: Boolean(orderData.reminderEnabled),
         reminderTiming: orderData.reminderTiming || '1_hour',
         reminderTimings: orderData.reminderTimings || (orderData.reminderTiming ? [orderData.reminderTiming] : ['1_hour']),
@@ -173,6 +177,33 @@ export default function App() {
               orderId: targetOrderId,
             }).catch(() => {});
           });
+        }
+
+        // If delivery fees were entered, automatically record as an expense in /expenses
+        if (
+          orderToSave.fulfillmentType === 'Delivery' &&
+          typeof orderToSave.deliveryCost === 'number' &&
+          orderToSave.deliveryCost > 0
+        ) {
+          const deliveryExpenseId = `exp-deliv-${targetOrderId}`;
+          const deliveryExpense: OrderExpense = {
+            id: deliveryExpenseId,
+            orderId: targetOrderId,
+            amount: orderToSave.deliveryCost,
+            notes: orderToSave.deliveryPerson
+              ? `Delivery fee (${orderToSave.deliveryPerson})`
+              : `Delivery fee for ${orderToSave.customerName}`,
+            date: orderToSave.deliveryDate || new Date().toISOString(),
+          };
+
+          FirestoreService.saveExpense(deliveryExpense).catch((e) =>
+            console.warn('Failed to record delivery fee to /expenses:', e)
+          );
+
+          setExpenses((prev) => [
+            deliveryExpense,
+            ...prev.filter((e) => e.id !== deliveryExpenseId),
+          ]);
         }
       }
     }
