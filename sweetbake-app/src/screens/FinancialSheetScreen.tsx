@@ -195,11 +195,40 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
       .filter((t) => t.type === 'Expense')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    // Pending Income (Unpaid remaining balance on active orders in this period)
+    const pendingBalance = orders
+      .filter((o) => {
+        const orderDate = new Date(o.deliveryDate || o.createdAt);
+        return (
+          orderDate >= periodRange.start &&
+          orderDate <= periodRange.end &&
+          o.status !== 'Delivered'
+        );
+      })
+      .reduce((sum, o) => {
+        const remaining = typeof o.remainingPayment === 'number'
+          ? o.remainingPayment
+          : Math.max(0, (o.quotedPrice || 0) - (o.downPayment || 0));
+        return sum + remaining;
+      }, 0);
+
+    const receivedIncome = orders
+      .filter((o) => {
+        const orderDate = new Date(o.deliveryDate || o.createdAt);
+        return orderDate >= periodRange.start && orderDate <= periodRange.end;
+      })
+      .reduce((sum, o) => {
+        if (o.status === 'Delivered') {
+          return sum + (o.quotedPrice || 0);
+        }
+        return sum + (o.downPayment || 0);
+      }, 0);
+
     const netProfit = totalIncome - totalExpenses;
     const profitMargin = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
 
-    return { totalIncome, totalExpenses, netProfit, profitMargin };
-  }, [transactions]);
+    return { totalIncome, totalExpenses, pendingBalance, receivedIncome, netProfit, profitMargin };
+  }, [transactions, orders, periodRange]);
 
   // Filtered transactions for the list
   const filteredList = useMemo(() => {
@@ -284,7 +313,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
               <View style={[styles.kpiIconBox, { backgroundColor: '#E8F5E9' }]}>
                 <Ionicons name="arrow-down-circle" size={16} color="#2E7D32" />
               </View>
-              <Text style={styles.kpiLabel}>Income</Text>
+              <Text style={styles.kpiLabel}>Total Income</Text>
             </View>
             <Text style={[styles.kpiValue, { color: '#2E7D32' }]}>
               +${totals.totalIncome.toFixed(2)}
@@ -302,6 +331,37 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
             <Text style={[styles.kpiValue, { color: '#C62828' }]}>
               -${totals.totalExpenses.toFixed(2)}
             </Text>
+          </View>
+        </View>
+
+        {/* Second KPI Row: Pending Balance Due & Received Income */}
+        <View style={[styles.kpiRow, { marginTop: 8 }]}>
+          {/* Pending Balance Due */}
+          <View style={[styles.kpiCard, { borderLeftColor: '#D97706' }]}>
+            <View style={styles.kpiHeader}>
+              <View style={[styles.kpiIconBox, { backgroundColor: '#FEF3C7' }]}>
+                <Ionicons name="time-outline" size={16} color="#D97706" />
+              </View>
+              <Text style={styles.kpiLabel}>Pending Balance</Text>
+            </View>
+            <Text style={[styles.kpiValue, { color: '#D97706' }]}>
+              ${totals.pendingBalance.toFixed(2)}
+            </Text>
+            <Text style={styles.kpiSubCaption}>Unpaid remaining due</Text>
+          </View>
+
+          {/* Received / Collected Income */}
+          <View style={[styles.kpiCard, { borderLeftColor: '#059669' }]}>
+            <View style={styles.kpiHeader}>
+              <View style={[styles.kpiIconBox, { backgroundColor: '#D1FAE5' }]}>
+                <Ionicons name="checkmark-done-circle-outline" size={16} color="#059669" />
+              </View>
+              <Text style={styles.kpiLabel}>Collected</Text>
+            </View>
+            <Text style={[styles.kpiValue, { color: '#059669' }]}>
+              ${totals.receivedIncome.toFixed(2)}
+            </Text>
+            <Text style={styles.kpiSubCaption}>Paid in advance & full</Text>
           </View>
         </View>
 
@@ -568,6 +628,12 @@ const styles = StyleSheet.create({
   kpiValue: {
     fontSize: 18,
     fontWeight: '800',
+  },
+  kpiSubCaption: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
+    marginTop: 2,
   },
   netProfitBanner: {
     marginTop: 10,
