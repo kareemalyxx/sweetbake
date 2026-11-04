@@ -171,10 +171,22 @@ export const FirestoreService = {
     };
 
     // Stored as native Firebase Timestamps: deliveryDate - offset
-    const notificationTimestamps = timings.map((timing) => {
+    const computedTimestamps = timings.map((timing) => {
       const triggerMs = deliveryMs - (offsetMap[timing] ?? 0);
       return Timestamp.fromMillis(triggerMs);
     });
+
+    // Also include custom specified date & times as native Timestamps
+    const customTimestamps = Array.isArray(order.customReminderDates)
+      ? order.customReminderDates
+          .map((iso) => {
+            const d = new Date(iso);
+            return !isNaN(d.getTime()) ? Timestamp.fromDate(d) : null;
+          })
+          .filter((t): t is Timestamp => t !== null)
+      : [];
+
+    const notificationTimestamps = [...computedTimestamps, ...customTimestamps];
 
     const dataToSave = {
       ...order,
@@ -182,6 +194,7 @@ export const FirestoreService = {
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
       reminderTimings: timings,
+      customReminderDates: order.customReminderDates || [],
       notificationTimestamps,
       expenses: Array.isArray(order.expenses)
         ? order.expenses.map((e) => ({

@@ -129,7 +129,7 @@ service cloud.firestore {
         'id', 'customerName', 'customerPhone', 'deliveryDate', 'cakeType', 'shape', 'flavor',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location', 'reminderEnabled',
-        'reminderTiming', 'reminderTimings', 'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
+        'reminderTiming', 'reminderTimings', 'customReminderDates', 'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
       let validFulfillment = ['Pickup', 'Delivery'];
@@ -158,6 +158,7 @@ service cloud.firestore {
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&
         (!('reminderTimings' in data) || (data.reminderTimings is list && data.reminderTimings.size() <= 10)) &&
+        (!('customReminderDates' in data) || (data.customReminderDates is list && data.customReminderDates.size() <= 10)) &&
         (!('notificationTimestamps' in data) || (data.notificationTimestamps is list && data.notificationTimestamps.size() <= 10)) &&
         (!('addons' in data) || (data.addons is map && data.addons.size() <= 30) || (data.addons is list && data.addons.size() <= 30)) &&
         (!('referenceImages' in data) || (data.referenceImages is list && data.referenceImages.size() <= 10)) &&

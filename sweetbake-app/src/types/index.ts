@@ -33,7 +33,8 @@ export interface CakeOrder {
   reminderEnabled?: boolean; // In-app reminder active
   reminderTiming?: ReminderTiming; // Legacy single reminder timing
   reminderTimings?: ReminderTiming[]; // Multiple reminder notifications (e.g., ['15_min', '1_hour', '1_day'])
-  notificationTimestamps?: string[]; // Calculated trigger timestamps (ISO strings) based on deliveryDate - offset
+  customReminderDates?: string[]; // Specific custom reminder date & times chosen by user (ISO strings)
+  notificationTimestamps?: string[]; // Calculated trigger timestamps (ISO strings) based on deliveryDate - offset or custom alerts
   referenceImages: string[]; // Base64 or local file URIs
   createdAt: string;
 }

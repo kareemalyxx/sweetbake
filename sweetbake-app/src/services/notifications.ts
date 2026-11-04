@@ -12,7 +12,7 @@ export interface InAppNotification {
   fulfillmentType: string;
   location?: string;
   message: string;
-  timing: ReminderTiming;
+  timing?: ReminderTiming | 'custom';
   timingLabel: string;
   isRead: boolean;
   createdAt: string;
@@ -169,6 +169,38 @@ export const NotificationService = {
         createdAt: new Date().toISOString(),
       });
     });
+
+    // Also schedule any custom specific date & time reminders picked by user
+    if (Array.isArray(order.customReminderDates) && order.customReminderDates.length > 0) {
+      order.customReminderDates.forEach((customIso, idx) => {
+        const customDate = new Date(customIso);
+        if (!isNaN(customDate.getTime())) {
+          const timingLabel = customDate.toLocaleString(undefined, {
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+          });
+
+          newNotifications.push({
+            id: `remind-${order.id}-custom-${idx}`,
+            orderId: order.id,
+            customerName: order.customerName,
+            customerPhone: order.customerPhone,
+            triggerTime: customDate.toISOString(),
+            deliveryDate: order.deliveryDate,
+            fulfillmentType: order.fulfillmentType || 'Pickup',
+            location: order.location,
+            message: `Custom alert for ${order.customerName} (${timingLabel})`,
+            timing: 'custom',
+            timingLabel: `At ${timingLabel}`,
+            isRead: false,
+            createdAt: new Date().toISOString(),
+          });
+        }
+      });
+    }
 
     const current = await this.getAllReminders();
     // Remove old reminders for this order and merge in the new multi-reminders

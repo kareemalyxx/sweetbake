@@ -67,9 +67,15 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [expenseNotes, setExpenseNotes] = useState('');
   const [showAddExpense, setShowAddExpense] = useState(false);
 
-  // Reminders (support multiple notification timings)
+  // Reminders (support multiple notification timings & custom specific dates)
   const [reminderEnabled, setReminderEnabled] = useState(false);
   const [reminderTimings, setReminderTimings] = useState<ReminderTiming[]>(['1_hour']);
+  const [customReminderDates, setCustomReminderDates] = useState<string[]>([]);
+
+  // Custom date/time picker state for reminders
+  const [customReminderPickerDate, setCustomReminderPickerDate] = useState<Date>(new Date());
+  const [showCustomDatePicker, setShowCustomDatePicker] = useState(false);
+  const [showCustomTimePicker, setShowCustomTimePicker] = useState(false);
 
   const [customRequirements, setCustomRequirements] = useState('');
   const [referenceImages, setReferenceImages] = useState<string[]>([]);
@@ -155,6 +161,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       } else {
         setReminderTimings(['1_hour']);
       }
+      setCustomReminderDates(
+        Array.isArray(orderToEdit.customReminderDates) ? orderToEdit.customReminderDates : []
+      );
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
@@ -176,6 +185,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setLocation('');
       setReminderEnabled(false);
       setReminderTimings(['1_hour']);
+      setCustomReminderDates([]);
       setCustomRequirements('');
       setReferenceImages([]);
 
@@ -185,6 +195,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     }
     setShowDatePicker(false);
     setShowTimePicker(false);
+    setShowCustomDatePicker(false);
+    setShowCustomTimePicker(false);
   }, [orderToEdit, initialDate, visible]);
 
   // Calculated remaining payment & profit after expenses
@@ -221,6 +233,50 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       updated.setMinutes(selected.getMinutes());
       setDeliveryDate(updated);
     }
+  };
+
+  // Handle custom reminder Date change
+  const onCustomDateChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowCustomDatePicker(false);
+    }
+    if (selected) {
+      triggerHaptic.selection();
+      const updated = new Date(customReminderPickerDate);
+      updated.setFullYear(selected.getFullYear());
+      updated.setMonth(selected.getMonth());
+      updated.setDate(selected.getDate());
+      setCustomReminderPickerDate(updated);
+    }
+  };
+
+  // Handle custom reminder Time change
+  const onCustomTimeChange = (_event: DateTimePickerEvent, selected?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowCustomTimePicker(false);
+    }
+    if (selected) {
+      triggerHaptic.selection();
+      const updated = new Date(customReminderPickerDate);
+      updated.setHours(selected.getHours());
+      updated.setMinutes(selected.getMinutes());
+      setCustomReminderPickerDate(updated);
+    }
+  };
+
+  const handleAddCustomReminder = () => {
+    triggerHaptic.success();
+    const isoString = customReminderPickerDate.toISOString();
+    if (!customReminderDates.includes(isoString)) {
+      setCustomReminderDates([...customReminderDates, isoString]);
+    }
+    setShowCustomDatePicker(false);
+    setShowCustomTimePicker(false);
+  };
+
+  const handleRemoveCustomReminder = (iso: string) => {
+    triggerHaptic.light();
+    setCustomReminderDates(customReminderDates.filter((d) => d !== iso));
   };
 
   const handleAddNewFlavor = async () => {
@@ -430,6 +486,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       reminderEnabled,
       reminderTiming: reminderEnabled ? reminderTimings[0] : undefined,
       reminderTimings: reminderEnabled ? reminderTimings : [],
+      customReminderDates: reminderEnabled ? customReminderDates : [],
       customRequirements: customRequirements.trim(),
       deliveryDate: deliveryDate.toISOString(),
       referenceImages,
@@ -762,6 +819,177 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                           })
                           .join(', ')}
                       </Text>
+                    </View>
+
+                    {/* Section: Custom "Time At" Specific Alerts */}
+                    <View style={{ marginTop: 14 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={styles.timingLabel}>Specific Custom Date & Time Alerts</Text>
+                        <TouchableOpacity
+                          style={styles.addCustomAlertBtn}
+                          onPress={() => {
+                            triggerHaptic.selection();
+                            // Default custom picker to an hour before deliveryDate or now
+                            const defaultPickerTime = new Date(deliveryDate.getTime() - 3600000);
+                            setCustomReminderPickerDate(defaultPickerTime > new Date() ? defaultPickerTime : new Date());
+                            setShowCustomDatePicker(true);
+                            setShowCustomTimePicker(false);
+                          }}
+                        >
+                          <Ionicons name="add-circle" size={16} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                          <Text style={styles.addCustomAlertBtnText}>Add Custom Time</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Pickers for custom date and time (using exact same method as schedule) */}
+                      {(showCustomDatePicker || showCustomTimePicker) && (
+                        <View style={styles.customPickerBox}>
+                          <Text style={styles.customPickerHeading}>
+                            Pick Custom Alert Date & Time
+                          </Text>
+
+                          {/* 1. Custom Date Picker Card */}
+                          <TouchableOpacity
+                            style={[styles.pickerButton, showCustomDatePicker && styles.pickerButtonActive]}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              triggerHaptic.selection();
+                              setShowCustomDatePicker(true);
+                              setShowCustomTimePicker(false);
+                            }}
+                          >
+                            <View style={styles.pickerIconWrapper}>
+                              <Ionicons name="calendar" size={18} color={Theme.colors.deepRose} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.pickerLabel}>Custom Alert Date</Text>
+                              <Text style={styles.pickerValue}>
+                                {customReminderPickerDate.toLocaleDateString(undefined, {
+                                  weekday: 'short',
+                                  month: 'short',
+                                  day: 'numeric',
+                                  year: 'numeric',
+                                })}
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name={showCustomDatePicker ? 'chevron-up' : 'chevron-down'}
+                              size={16}
+                              color={Theme.colors.textSecondary}
+                            />
+                          </TouchableOpacity>
+
+                          {showCustomDatePicker && (
+                            <View style={styles.inlinePickerContainer}>
+                              <DateTimePicker
+                                value={customReminderPickerDate}
+                                mode="date"
+                                display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                                onChange={onCustomDateChange}
+                                accentColor={Theme.colors.deepRose}
+                                textColor={Theme.colors.textDark}
+                                themeVariant="light"
+                              />
+                            </View>
+                          )}
+
+                          {/* 2. Custom Time Picker Card */}
+                          <TouchableOpacity
+                            style={[styles.pickerButton, showCustomTimePicker && styles.pickerButtonActive, { marginTop: 8 }]}
+                            activeOpacity={0.8}
+                            onPress={() => {
+                              triggerHaptic.selection();
+                              setShowCustomTimePicker(true);
+                              setShowCustomDatePicker(false);
+                            }}
+                          >
+                            <View style={[styles.pickerIconWrapper, { backgroundColor: Theme.colors.lavenderLight }]}>
+                              <Ionicons name="time" size={18} color={Theme.colors.softLilac} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.pickerLabel}>Custom Alert Time</Text>
+                              <Text style={styles.pickerValue}>
+                                {customReminderPickerDate.toLocaleTimeString(undefined, {
+                                  hour: 'numeric',
+                                  minute: '2-digit',
+                                  hour12: true,
+                                })}
+                              </Text>
+                            </View>
+                            <Ionicons
+                              name={showCustomTimePicker ? 'chevron-up' : 'chevron-down'}
+                              size={16}
+                              color={Theme.colors.textSecondary}
+                            />
+                          </TouchableOpacity>
+
+                          {showCustomTimePicker && (
+                            <View style={styles.inlinePickerContainer}>
+                              <DateTimePicker
+                                value={customReminderPickerDate}
+                                mode="time"
+                                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                                onChange={onCustomTimeChange}
+                                accentColor={Theme.colors.deepRose}
+                                textColor={Theme.colors.textDark}
+                                themeVariant="light"
+                              />
+                            </View>
+                          )}
+
+                          <View style={styles.customPickerActionRow}>
+                            <TouchableOpacity
+                              style={styles.customCancelBtn}
+                              onPress={() => {
+                                setShowCustomDatePicker(false);
+                                setShowCustomTimePicker(false);
+                              }}
+                            >
+                              <Text style={styles.customCancelText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.customConfirmBtn}
+                              onPress={handleAddCustomReminder}
+                            >
+                              <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                              <Text style={styles.customConfirmText}>Save Alert Time</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                      {/* List of configured custom alerts */}
+                      {customReminderDates.length > 0 ? (
+                        <View style={styles.customAlertList}>
+                          {customReminderDates.map((iso) => {
+                            const d = new Date(iso);
+                            const formatted = `${d.toLocaleDateString(undefined, {
+                              month: 'short',
+                              day: 'numeric',
+                            })} at ${d.toLocaleTimeString(undefined, {
+                              hour: 'numeric',
+                              minute: '2-digit',
+                              hour12: true,
+                            })}`;
+                            return (
+                              <View key={iso} style={styles.customAlertItem}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
+                                  <Ionicons name="alarm" size={15} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
+                                  <Text style={styles.customAlertText}>{formatted}</Text>
+                                </View>
+                                <TouchableOpacity
+                                  onPress={() => handleRemoveCustomReminder(iso)}
+                                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                                >
+                                  <Ionicons name="close-circle" size={18} color="#E53935" />
+                                </TouchableOpacity>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : (
+                        <Text style={styles.noCustomAlertsText}>No custom alert times added yet.</Text>
+                      )}
                     </View>
 
                     {/* Direct WhatsApp Test / Send Option */}
@@ -1539,6 +1767,94 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Theme.colors.deepRose,
     flex: 1,
+  },
+  addCustomAlertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.cream,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
+  },
+  addCustomAlertBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  customPickerBox: {
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 12,
+    padding: 10,
+    marginTop: 6,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
+  },
+  customPickerHeading: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+    marginBottom: 8,
+  },
+  customPickerActionRow: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 10,
+  },
+  customCancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  customCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
+  },
+  customConfirmBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: Theme.colors.deepRose,
+  },
+  customConfirmText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  customAlertList: {
+    gap: 6,
+    marginTop: 6,
+  },
+  customAlertItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Theme.colors.cream,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+  },
+  customAlertText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  noCustomAlertsText: {
+    fontSize: 11,
+    fontStyle: 'italic',
+    color: Theme.colors.textSecondary,
+    marginTop: 4,
   },
   directWhatsAppBtn: {
     flexDirection: 'row',
