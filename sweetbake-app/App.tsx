@@ -209,6 +209,7 @@ export default function App() {
           orderToSave.deliveryCost > 0;
 
         if (hasDeliveryCost) {
+          const existingDeliveryExp = expenses.find((e) => e.id === deliveryExpenseId);
           const deliveryExpense: OrderExpense = {
             id: deliveryExpenseId,
             orderId: targetOrderId,
@@ -217,6 +218,7 @@ export default function App() {
               ? `Delivery fee (${orderToSave.deliveryPerson})`
               : `Delivery fee for ${orderToSave.customerName}`,
             date: orderToSave.deliveryDate || new Date().toISOString(),
+            createdAt: existingDeliveryExp?.createdAt,
           };
 
           // Save / update in Firestore

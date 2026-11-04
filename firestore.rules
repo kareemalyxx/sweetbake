@@ -207,10 +207,10 @@ service cloud.firestore {
     function isValidExpense(data) {
       let allowed = ['id', 'orderId', 'amount', 'notes', 'date', 'createdAt', 'updatedAt', 'userId'];
       return hasOnlyAllowedFields(allowed) &&
-        hasRequiredFields(['amount', 'date', 'createdAt']) &&
+        hasRequiredFields(['amount', 'date']) &&
         data.amount is number && data.amount >= 0 && data.amount <= 1000000 &&
         isValidTimestampOrIsoDate(data.date) &&
-        isValidTimestampOrIsoDate(data.createdAt) &&
+        (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&
         (!('notes' in data) || (data.notes is string && data.notes.size() <= 500)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
         (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
@@ -246,7 +246,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidExpense(request.resource.data);
       allow update: if isValidExpense(request.resource.data) &&
-        areImmutableFieldsUnchanged(['createdAt', 'id']);
+        areImmutableFieldsUnchanged(['id']);
       allow delete: if true;
     }
 

@@ -498,16 +498,25 @@ export const FirestoreService = {
    */
   async saveExpense(expense: OrderExpense): Promise<void> {
     const expenseRef = doc(db, 'expenses', expense.id);
-    const dataToSave = {
-      ...expense,
+    const dataToSave: Record<string, any> = {
       id: expense.id,
       amount: typeof expense.amount === 'number' ? expense.amount : parseFloat(expense.amount as any || 0),
       notes: expense.notes || '',
       date: toFirebaseTimestamp(expense.date),
-      createdAt: expense.createdAt ? toFirebaseTimestamp(expense.createdAt) : Timestamp.now(),
       updatedAt: Timestamp.now(),
-      ...(expense.orderId ? { orderId: expense.orderId } : {}),
     };
+
+    if (expense.orderId) {
+      dataToSave.orderId = expense.orderId;
+    }
+
+    if (expense.createdAt) {
+      dataToSave.createdAt = toFirebaseTimestamp(expense.createdAt);
+    } else {
+      // For new documents, set createdAt.
+      dataToSave.createdAt = Timestamp.now();
+    }
+
     await setDoc(expenseRef, dataToSave, { merge: true });
   },
 
