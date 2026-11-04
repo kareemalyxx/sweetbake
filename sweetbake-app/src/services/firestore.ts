@@ -7,6 +7,7 @@ import {
   onSnapshot,
   query,
   orderBy,
+  Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
 import { CakeOrder, GeneralRequirement } from '../types';
@@ -14,6 +15,42 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ORDERS_CACHE_KEY = '@sweetbake_orders_cache_v1';
 const REQS_CACHE_KEY = '@sweetbake_reqs_cache_v1';
+
+/**
+ * Helper to normalize Firebase Timestamp or ISO string to ISO string for JS components
+ */
+function toIsoDate(val: any): string {
+  if (!val) return new Date().toISOString();
+  if (typeof val.toDate === 'function') {
+    return val.toDate().toISOString();
+  }
+  if (val instanceof Date) {
+    return val.toISOString();
+  }
+  if (typeof val === 'string') {
+    return val;
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * Helper to convert JS Date or ISO string into a Firebase Timestamp
+ */
+function toFirebaseTimestamp(val: any): Timestamp {
+  if (val && typeof val.toDate === 'function') {
+    return val;
+  }
+  if (val instanceof Date) {
+    return Timestamp.fromDate(val);
+  }
+  if (typeof val === 'string') {
+    const parsed = new Date(val);
+    if (!isNaN(parsed.getTime())) {
+      return Timestamp.fromDate(parsed);
+    }
+  }
+  return Timestamp.now();
+}
 
 export const FirestoreService = {
   /**
@@ -31,7 +68,20 @@ export const FirestoreService = {
       (snapshot) => {
         const orders: CakeOrder[] = [];
         snapshot.forEach((docSnap) => {
-          orders.push({ id: docSnap.id, ...(docSnap.data() as Omit<CakeOrder, 'id'>) });
+          const raw = docSnap.data();
+          orders.push({
+            id: docSnap.id,
+            ...(raw as any),
+            deliveryDate: toIsoDate(raw.deliveryDate),
+            createdAt: toIsoDate(raw.createdAt),
+            updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+            expenses: Array.isArray(raw.expenses)
+              ? raw.expenses.map((e: any) => ({
+                  ...e,
+                  date: toIsoDate(e.date),
+                }))
+              : [],
+          });
         });
         AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders)).catch(() => {});
         onSuccess(orders);
@@ -53,7 +103,20 @@ export const FirestoreService = {
       const snapshot = await getDocs(q);
       const orders: CakeOrder[] = [];
       snapshot.forEach((docSnap) => {
-        orders.push({ id: docSnap.id, ...(docSnap.data() as Omit<CakeOrder, 'id'>) });
+        const raw = docSnap.data();
+        orders.push({
+          id: docSnap.id,
+          ...(raw as any),
+          deliveryDate: toIsoDate(raw.deliveryDate),
+          createdAt: toIsoDate(raw.createdAt),
+          updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          expenses: Array.isArray(raw.expenses)
+            ? raw.expenses.map((e: any) => ({
+                ...e,
+                date: toIsoDate(e.date),
+              }))
+            : [],
+        });
       });
       await AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders));
       return orders;
@@ -65,13 +128,21 @@ export const FirestoreService = {
   },
 
   /**
-   * Create or update an order
+   * Create or update an order with native Firebase Timestamp dates
    */
   async saveOrder(order: CakeOrder): Promise<void> {
     const orderRef = doc(db, 'orders', order.id);
     const dataToSave = {
       ...order,
-      updatedAt: new Date().toISOString(),
+      deliveryDate: toFirebaseTimestamp(order.deliveryDate),
+      createdAt: toFirebaseTimestamp(order.createdAt),
+      updatedAt: Timestamp.now(),
+      expenses: Array.isArray(order.expenses)
+        ? order.expenses.map((e) => ({
+            ...e,
+            date: toFirebaseTimestamp(e.date),
+          }))
+        : [],
     };
     await setDoc(orderRef, dataToSave, { merge: true });
   },
@@ -99,7 +170,14 @@ export const FirestoreService = {
       (snapshot) => {
         const reqs: GeneralRequirement[] = [];
         snapshot.forEach((docSnap) => {
-          reqs.push({ id: docSnap.id, ...(docSnap.data() as Omit<GeneralRequirement, 'id'>) });
+          const raw = docSnap.data();
+          reqs.push({
+            id: docSnap.id,
+            reqId: raw.reqId || docSnap.id,
+            ...(raw as any),
+            createdAt: toIsoDate(raw.createdAt),
+            updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          });
         });
         AsyncStorage.setItem(REQS_CACHE_KEY, JSON.stringify(reqs)).catch(() => {});
         onSuccess(reqs);
@@ -121,7 +199,14 @@ export const FirestoreService = {
       const snapshot = await getDocs(q);
       const reqs: GeneralRequirement[] = [];
       snapshot.forEach((docSnap) => {
-        reqs.push({ id: docSnap.id, ...(docSnap.data() as Omit<GeneralRequirement, 'id'>) });
+        const raw = docSnap.data();
+        reqs.push({
+          id: docSnap.id,
+          reqId: raw.reqId || docSnap.id,
+          ...(raw as any),
+          createdAt: toIsoDate(raw.createdAt),
+          updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+        });
       });
       await AsyncStorage.setItem(REQS_CACHE_KEY, JSON.stringify(reqs));
       return reqs;
@@ -133,7 +218,7 @@ export const FirestoreService = {
   },
 
   /**
-   * Save a requirement item (ensures reqId is stored in the document)
+   * Save a requirement item with Firebase Timestamp dates
    */
   async saveRequirement(req: GeneralRequirement): Promise<void> {
     const reqId = req.reqId || req.id;
@@ -142,7 +227,8 @@ export const FirestoreService = {
       ...req,
       id: reqId,
       reqId: reqId,
-      updatedAt: new Date().toISOString(),
+      createdAt: toFirebaseTimestamp(req.createdAt),
+      updatedAt: Timestamp.now(),
     };
     await setDoc(reqRef, dataToSave, { merge: true });
   },
