@@ -111,10 +111,17 @@ export const NormalizedStorage = {
         flavorName: legacy.flavor,
         customRequirements: legacy.customRequirements || '',
       },
-      addons: (legacy.addons || []).map((addonName) => ({
-        addonId: addonName,
-        name: addonName,
-      })),
+      addons: Array.isArray(legacy.addons)
+        ? legacy.addons.map((addonName: string) => ({
+            addonId: addonName,
+            name: addonName,
+          }))
+        : legacy.addons
+        ? Object.keys(legacy.addons).map((addonName: string) => ({
+            addonId: addonName,
+            name: addonName,
+          }))
+        : [],
       financials: {
         quotedTotal: quoted,
         downPayment: down,
@@ -140,7 +147,10 @@ export const NormalizedStorage = {
       cakeType: norm.specifications.cakeTypeName,
       shape: norm.specifications.shapeName,
       flavor: norm.specifications.flavorName,
-      addons: norm.addons.map((a) => a.name),
+      addons: norm.addons.reduce<Record<string, boolean>>((acc, a) => {
+        acc[a.name] = false;
+        return acc;
+      }, {}),
       customRequirements: norm.specifications.customRequirements,
       status: norm.status,
       quotedPrice: norm.financials.quotedTotal,
