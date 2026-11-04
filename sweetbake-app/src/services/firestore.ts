@@ -194,19 +194,37 @@ export const FirestoreService = {
     // all expenses are exclusively stored and queried in the dedicated /expenses collection.
     const { expenses: _expenses, ...orderWithoutExpenses } = order;
 
-    const dataToSave = {
-      ...orderWithoutExpenses,
+    // Clean all undefined values to prevent Firestore 'Unsupported field value: undefined' errors
+    const cleanedOrder: Record<string, any> = {};
+    Object.entries(orderWithoutExpenses).forEach(([key, val]) => {
+      if (val !== undefined) {
+        cleanedOrder[key] = val;
+      }
+    });
+
+    const dataToSave: Record<string, any> = {
+      ...cleanedOrder,
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
       reminderTimings: timings,
       customReminderDates: order.customReminderDates || [],
       notificationTimestamps,
-      ...(order.deliveryHandoverTime ? { deliveryHandoverTime: toFirebaseTimestamp(order.deliveryHandoverTime) } : {}),
-      ...(typeof order.deliveryCost === 'number' ? { deliveryCost: order.deliveryCost } : {}),
-      ...(order.deliveryPerson ? { deliveryPerson: order.deliveryPerson } : {}),
-      ...(order.deliveryPhone ? { deliveryPhone: order.deliveryPhone } : {}),
     };
+
+    if (order.deliveryHandoverTime) {
+      dataToSave.deliveryHandoverTime = toFirebaseTimestamp(order.deliveryHandoverTime);
+    }
+    if (typeof order.deliveryCost === 'number') {
+      dataToSave.deliveryCost = order.deliveryCost;
+    }
+    if (order.deliveryPerson) {
+      dataToSave.deliveryPerson = order.deliveryPerson;
+    }
+    if (order.deliveryPhone) {
+      dataToSave.deliveryPhone = order.deliveryPhone;
+    }
+
     await setDoc(orderRef, dataToSave, { merge: true });
   },
 
