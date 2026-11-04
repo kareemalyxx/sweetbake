@@ -166,7 +166,7 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         ListEmptyComponent={
           <EmptyState
             title={`No ${selectedCategory} To-Dos`}
-            message={`All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`}
+            subtitle={`All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`}
           />
         }
         renderItem={({ item }) => (

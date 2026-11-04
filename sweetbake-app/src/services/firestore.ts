@@ -39,7 +39,7 @@ export const FirestoreService = {
       },
       (error) => {
         console.warn('Error listening to orders:', error);
-        if (onError) onError(error);
+        if (onError) onError(new Error(error.message));
       }
     );
   },
@@ -109,7 +109,7 @@ export const FirestoreService = {
       },
       (error) => {
         console.warn('Error listening to requirements:', error);
-        if (onError) onError(error);
+        if (onError) onError(new Error(error.message));
       }
     );
   },
