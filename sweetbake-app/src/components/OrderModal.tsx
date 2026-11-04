@@ -524,6 +524,31 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
     const fullPhone = customerPhone.trim() ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}` : '';
 
+    // Calculate trigger times map: label -> trigger ISO string
+    const remindersMap: Record<string, string> = {};
+    if (reminderEnabled) {
+      const deliveryMs = deliveryDate.getTime();
+      const offsetMap: Record<ReminderTiming, number> = {
+        '15_min': 15 * 60 * 1000,
+        '1_hour': 60 * 60 * 1000,
+        '2_hours': 2 * 60 * 60 * 1000,
+        '1_day': 24 * 60 * 60 * 1000,
+        'on_time': 0,
+      };
+
+      reminderTimings.forEach((timing) => {
+        const triggerDate = new Date(deliveryMs - (offsetMap[timing] ?? 0));
+        remindersMap[timing] = triggerDate.toISOString();
+      });
+
+      customReminderDates.forEach((iso, idx) => {
+        const d = new Date(iso);
+        if (!isNaN(d.getTime())) {
+          remindersMap[`Custom Alert ${idx + 1}`] = d.toISOString();
+        }
+      });
+    }
+
     triggerHaptic.success();
     onSave({
       id: orderToEdit ? orderToEdit.id : undefined,
@@ -545,10 +570,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       deliveryPhone: fulfillmentType === 'Delivery' ? deliveryPhone.trim() || undefined : undefined,
       deliveryHandoverTime: fulfillmentType === 'Delivery' && deliveryHandoverDate ? deliveryHandoverDate.toISOString() : undefined,
       reminderEnabled,
-      reminders: {
-        reminderTimings: reminderEnabled ? reminderTimings : [],
-        customReminderDates: reminderEnabled ? customReminderDates : [],
-      },
+      reminders: remindersMap,
       reminderTimings: reminderEnabled ? reminderTimings : [],
       customReminderDates: reminderEnabled ? customReminderDates : [],
       customRequirements: customRequirements.trim(),

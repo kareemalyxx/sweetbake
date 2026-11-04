@@ -32,10 +32,10 @@ service cloud.firestore {
     //   - fulfillmentType: string (optional, enum: 'Pickup'|'Delivery')
     //   - location: string (optional, 0..300 chars)
     //   - reminderEnabled: bool (optional)
-    //   - reminders: map containing reminderTimings, customReminderDates, notificationTimestamps (optional)
-    //   - reminderTimings: list of strings (optional, max 10 items)
-    //   - customReminderDates: list of strings (optional, max 10 items)
-    //   - notificationTimestamps: list of strings (optional, max 10 items)
+    //   - reminders: map of reminder labels to trigger timestamps/ISO dates (optional, max 20 entries)
+    //   - reminderTimings: list of strings (optional, legacy support, max 10 items)
+    //   - customReminderDates: list of strings (optional, legacy support, max 10 items)
+    //   - notificationTimestamps: list of strings (optional, legacy support, max 10 items)
     //   - addons: map of addon name to boolean status (optional, max 30 entries) or legacy list of strings
     //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
     //   - createdAt: timestamp or string (required on create, immutable)
@@ -166,12 +166,7 @@ service cloud.firestore {
         (!('deliveryHandoverTime' in data) || isValidTimestampOrIsoDate(data.deliveryHandoverTime)) &&
         (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
-        (!('reminders' in data) || (
-          data.reminders is map &&
-          (!('reminderTimings' in data.reminders) || (data.reminders.reminderTimings is list && data.reminders.reminderTimings.size() <= 10)) &&
-          (!('customReminderDates' in data.reminders) || (data.reminders.customReminderDates is list && data.reminders.customReminderDates.size() <= 10)) &&
-          (!('notificationTimestamps' in data.reminders) || (data.reminders.notificationTimestamps is list && data.reminders.notificationTimestamps.size() <= 10))
-        )) &&
+        (!('reminders' in data) || (data.reminders is map && data.reminders.size() <= 20)) &&
         (!('reminderTimings' in data) || (data.reminderTimings is list && data.reminderTimings.size() <= 10)) &&
         (!('customReminderDates' in data) || (data.customReminderDates is list && data.customReminderDates.size() <= 10)) &&
         (!('notificationTimestamps' in data) || (data.notificationTimestamps is list && data.notificationTimestamps.size() <= 10)) &&

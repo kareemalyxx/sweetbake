@@ -5,7 +5,7 @@ import {
   NormalizedReminder,
   computeRemainingBalance,
 } from '../types/normalized';
-import { CakeOrder } from '../types';
+import { CakeOrder, ReminderTiming } from '../types';
 
 const KEYS = {
   CUSTOMERS: '@sweetbake_customers_v2',
@@ -131,7 +131,7 @@ export const NormalizedStorage = {
       reminder: legacy.reminderEnabled
         ? {
             enabled: true,
-            timing: legacy.reminders?.reminderTimings?.[0] || legacy.reminderTimings?.[0] || '1_hour',
+            timing: (legacy.reminderTimings?.[0] as ReminderTiming) || '1_hour',
           }
         : undefined,
       createdAt: legacy.createdAt || new Date().toISOString(),
@@ -158,8 +158,7 @@ export const NormalizedStorage = {
       reminderEnabled: norm.reminder?.enabled ?? false,
       reminders: norm.reminder?.enabled
         ? {
-            reminderTimings: [norm.reminder.timing],
-            customReminderDates: [],
+            [norm.reminder.timing]: norm.fulfillment.scheduledTime,
           }
         : undefined,
       reminderTimings: norm.reminder?.enabled ? [norm.reminder.timing] : [],

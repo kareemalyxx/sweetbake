@@ -76,18 +76,30 @@ export const FirestoreService = {
         const orders: CakeOrder[] = [];
         snapshot.forEach((docSnap) => {
           const raw = docSnap.data();
-      // Map raw reminders if stored in map format
-      const rawReminders = raw.reminders;
-      const reminderTimings = Array.isArray(rawReminders?.reminderTimings)
-        ? rawReminders.reminderTimings
-        : (Array.isArray(raw.reminderTimings) ? raw.reminderTimings : []);
-      const customReminderDates = Array.isArray(rawReminders?.customReminderDates)
-        ? rawReminders.customReminderDates
-        : (Array.isArray(raw.customReminderDates) ? raw.customReminderDates : []);
-      const rawTimestamps = rawReminders?.notificationTimestamps || raw.notificationTimestamps;
-      const notificationTimestamps = Array.isArray(rawTimestamps)
-        ? rawTimestamps.map((t: any) => toIsoDate(t))
-        : undefined;
+      // Map raw reminders (label -> timestamp)
+      const rawReminders = raw.reminders && typeof raw.reminders === 'object' ? raw.reminders : {};
+      const remindersParsed: Record<string, string> = {};
+      Object.entries(rawReminders).forEach(([key, val]) => {
+        remindersParsed[key] = toIsoDate(val);
+      });
+
+      const reminderTimings: ReminderTiming[] = Array.isArray(raw.reminderTimings)
+        ? raw.reminderTimings
+        : (Object.keys(remindersParsed).filter((k) =>
+            ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)
+          ) as ReminderTiming[]);
+
+      const customReminderDates: string[] = Array.isArray(raw.customReminderDates)
+        ? raw.customReminderDates
+        : Object.entries(remindersParsed)
+            .filter(([k]) => k.startsWith('Custom Alert') || k.startsWith('custom_'))
+            .map(([, v]) => v);
+
+      const notificationTimestamps = Object.values(remindersParsed).length > 0
+        ? Object.values(remindersParsed)
+        : (Array.isArray(raw.notificationTimestamps)
+            ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
+            : undefined);
 
       orders.push({
         id: docSnap.id,
@@ -99,11 +111,7 @@ export const FirestoreService = {
         reminderTimings,
         customReminderDates,
         notificationTimestamps,
-        reminders: {
-          reminderTimings,
-          customReminderDates,
-          notificationTimestamps,
-        },
+        reminders: remindersParsed,
         expenses: Array.isArray(raw.expenses)
           ? raw.expenses.map((e: any) => ({
               ...e,
@@ -140,18 +148,30 @@ export const FirestoreService = {
       const orders: CakeOrder[] = [];
       snapshot.forEach((docSnap) => {
         const raw = docSnap.data();
-        // Map raw reminders if stored in map format
-        const rawReminders = raw.reminders;
-        const reminderTimings = Array.isArray(rawReminders?.reminderTimings)
-          ? rawReminders.reminderTimings
-          : (Array.isArray(raw.reminderTimings) ? raw.reminderTimings : []);
-        const customReminderDates = Array.isArray(rawReminders?.customReminderDates)
-          ? rawReminders.customReminderDates
-          : (Array.isArray(raw.customReminderDates) ? raw.customReminderDates : []);
-        const rawTimestamps = rawReminders?.notificationTimestamps || raw.notificationTimestamps;
-        const notificationTimestamps = Array.isArray(rawTimestamps)
-          ? rawTimestamps.map((t: any) => toIsoDate(t))
-          : undefined;
+        // Map raw reminders (label -> timestamp)
+        const rawReminders = raw.reminders && typeof raw.reminders === 'object' ? raw.reminders : {};
+        const remindersParsed: Record<string, string> = {};
+        Object.entries(rawReminders).forEach(([key, val]) => {
+          remindersParsed[key] = toIsoDate(val);
+        });
+
+        const reminderTimings: ReminderTiming[] = Array.isArray(raw.reminderTimings)
+          ? raw.reminderTimings
+          : (Object.keys(remindersParsed).filter((k) =>
+              ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)
+            ) as ReminderTiming[]);
+
+        const customReminderDates: string[] = Array.isArray(raw.customReminderDates)
+          ? raw.customReminderDates
+          : Object.entries(remindersParsed)
+              .filter(([k]) => k.startsWith('Custom Alert') || k.startsWith('custom_'))
+              .map(([, v]) => v);
+
+        const notificationTimestamps = Object.values(remindersParsed).length > 0
+          ? Object.values(remindersParsed)
+          : (Array.isArray(raw.notificationTimestamps)
+              ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
+              : undefined);
 
         orders.push({
           id: docSnap.id,
@@ -163,11 +183,7 @@ export const FirestoreService = {
           reminderTimings,
           customReminderDates,
           notificationTimestamps,
-          reminders: {
-            reminderTimings,
-            customReminderDates,
-            notificationTimestamps,
-          },
+          reminders: remindersParsed,
           expenses: Array.isArray(raw.expenses)
             ? raw.expenses.map((e: any) => ({
                 ...e,
@@ -194,11 +210,12 @@ export const FirestoreService = {
   async saveOrder(order: CakeOrder): Promise<void> {
     const orderRef = doc(db, 'orders', order.id);
 
-    // Calculate notification timestamps based on deliveryDate and chosen timings
+    // Calculate notification timestamps and build the key-value reminders map:
+    // e.g. "1_hour": Timestamp, "15_min": Timestamp, "Custom Alert 1": Timestamp
     const deliveryMs = new Date(order.deliveryDate).getTime();
     const timings: ReminderTiming[] = Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0
       ? order.reminderTimings
-      : (order.reminders?.reminderTimings || []);
+      : (order.reminders ? (Object.keys(order.reminders).filter((k) => ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)) as ReminderTiming[]) : []);
 
     const offsetMap: Record<ReminderTiming, number> = {
       '15_min': 15 * 60 * 1000,
@@ -208,25 +225,23 @@ export const FirestoreService = {
       'on_time': 0,
     };
 
-    // Stored as native Firebase Timestamps: deliveryDate - offset
-    const computedTimestamps = timings.map((timing) => {
+    // Stored as native Firebase Timestamps in reminders map: key is label, value is timestamp
+    const remindersMap: Record<string, Timestamp> = {};
+
+    timings.forEach((timing) => {
       const triggerMs = deliveryMs - (offsetMap[timing] ?? 0);
-      return Timestamp.fromMillis(triggerMs);
+      remindersMap[timing] = Timestamp.fromMillis(triggerMs);
     });
 
-    const customReminderDates = order.customReminderDates || order.reminders?.customReminderDates || [];
+    const customReminderDates = order.customReminderDates || [];
+    customReminderDates.forEach((iso, idx) => {
+      const d = new Date(iso);
+      if (!isNaN(d.getTime())) {
+        remindersMap[`Custom Alert ${idx + 1}`] = Timestamp.fromDate(d);
+      }
+    });
 
-    // Also include custom specified date & times as native Timestamps
-    const customTimestamps = Array.isArray(customReminderDates)
-      ? customReminderDates
-          .map((iso) => {
-            const d = new Date(iso);
-            return !isNaN(d.getTime()) ? Timestamp.fromDate(d) : null;
-          })
-          .filter((t): t is Timestamp => t !== null)
-      : [];
-
-    const notificationTimestamps = [...computedTimestamps, ...customTimestamps];
+    const notificationTimestamps = Object.values(remindersMap);
 
     // Omit expenses and legacy reminderTiming from the order document
     const { expenses: _expenses, reminderTiming: _timing, ...orderWithoutExpenses } = order as any;
@@ -244,13 +259,8 @@ export const FirestoreService = {
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
-      // Single Map to store all reminder configuration
-      reminders: {
-        reminderTimings: timings,
-        customReminderDates: customReminderDates,
-        notificationTimestamps,
-      },
-      // Flat properties kept for query/view consistency
+      // Single Map to store all reminder configuration where label is key and value is Timestamp
+      reminders: remindersMap,
       reminderTimings: timings,
       customReminderDates: customReminderDates,
       notificationTimestamps,

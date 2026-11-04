@@ -170,10 +170,7 @@ export default function App() {
         deliveryPhone: orderData.deliveryPhone,
         deliveryHandoverTime: orderData.deliveryHandoverTime,
         reminderEnabled: Boolean(orderData.reminderEnabled),
-        reminders: orderData.reminders || {
-          reminderTimings: orderData.reminderTimings || ['1_hour'],
-          customReminderDates: orderData.customReminderDates || [],
-        },
+        reminders: orderData.reminders || {},
         reminderTimings: orderData.reminderTimings || ['1_hour'],
         customReminderDates: orderData.customReminderDates || [],
         referenceImages: orderData.referenceImages || [],
