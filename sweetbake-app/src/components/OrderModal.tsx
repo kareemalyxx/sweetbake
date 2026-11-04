@@ -19,6 +19,7 @@ import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/dat
 import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming, OrderExpense } from '../types';
 import { Theme } from '../theme';
 import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
+import { COUNTRY_CODES, parsePhoneCountry, CountryCodeItem } from '../constants/countryCodes';
 import { StorageService } from '../services/storage';
 import { NotificationService } from '../services/notifications';
 import { triggerHaptic } from '../services/haptics';
@@ -104,7 +105,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [availableAddons, setAvailableAddons] = useState<string[]>(CAKE_ADDONS);
 
   // Client Phone Number (for WhatsApp notification)
+  const [customerDialCode, setCustomerDialCode] = useState('+20');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearch, setCountrySearch] = useState('');
 
   // Add new item prompt states
   const [newFlavorInput, setNewFlavorInput] = useState('');
@@ -143,7 +147,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   useEffect(() => {
     if (orderToEdit) {
       setCustomerName(orderToEdit.customerName);
-      setCustomerPhone(orderToEdit.customerPhone || '');
+      const parsed = parsePhoneCountry(orderToEdit.customerPhone);
+      setCustomerDialCode(parsed.dialCode);
+      setCustomerPhone(parsed.nationalNumber);
       setCakeType(orderToEdit.cakeType);
       setShape(orderToEdit.shape);
       setFlavor(orderToEdit.flavor);
@@ -516,11 +522,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       return;
     }
 
+    const fullPhone = customerPhone.trim() ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}` : '';
+
     triggerHaptic.success();
     onSave({
       id: orderToEdit ? orderToEdit.id : undefined,
       customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerPhone: fullPhone,
       cakeType,
       shape,
       flavor,
@@ -594,10 +602,29 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               />
 
               <View style={styles.phoneInputRow}>
-                <Ionicons name="logo-whatsapp" size={18} color="#25D366" style={{ marginRight: 8 }} />
+                <Ionicons name="logo-whatsapp" size={18} color="#25D366" style={{ marginRight: 6 }} />
+                
+                {/* Country Code Picker Trigger */}
+                <TouchableOpacity
+                  style={styles.countryCodePickerBtn}
+                  onPress={() => {
+                    triggerHaptic.selection();
+                    setCountrySearch('');
+                    setShowCountryPicker(true);
+                  }}
+                >
+                  <Text style={styles.countryCodeFlag}>
+                    {COUNTRY_CODES.find((c) => c.dialCode === customerDialCode)?.flag || '🌐'}
+                  </Text>
+                  <Text style={styles.countryCodeText}>{customerDialCode}</Text>
+                  <Ionicons name="chevron-down" size={12} color={Theme.colors.textSecondary} style={{ marginLeft: 2 }} />
+                </TouchableOpacity>
+
+                <View style={styles.phoneDivider} />
+
                 <TextInput
                   style={styles.phoneInput}
-                  placeholder="WhatsApp / Phone number (e.g. +1 555 123 4567)"
+                  placeholder="WhatsApp number (e.g. 1012345678)"
                   placeholderTextColor={Theme.colors.textSecondary}
                   keyboardType="phone-pad"
                   value={customerPhone}
@@ -1213,9 +1240,12 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       style={styles.directWhatsAppBtn}
                       onPress={() => {
                         triggerHaptic.medium();
+                        const fullPhone = customerPhone.trim()
+                          ? `${customerDialCode}${customerPhone.trim().replace(/^0+/, '')}`
+                          : '';
                         NotificationService.sendWhatsAppNotification({
                           customerName: customerName.trim() || 'Valued Customer',
-                          customerPhone: customerPhone.trim(),
+                          customerPhone: fullPhone,
                           deliveryDate: deliveryDate.toISOString(),
                           cakeType,
                           shape,
@@ -1712,6 +1742,91 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               </View>
             </Modal>
           )}
+
+          {/* Country Code Picker Modal */}
+          <Modal
+            transparent
+            animationType="slide"
+            visible={showCountryPicker}
+            onRequestClose={() => setShowCountryPicker(false)}
+          >
+            <View style={styles.countryModalOverlay}>
+              <View style={styles.countryModalCard}>
+                <View style={styles.countryModalHeader}>
+                  <Text style={styles.countryModalTitle}>Select Country Code</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowCountryPicker(false)}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="close-circle" size={24} color={Theme.colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Search Bar for Country */}
+                <View style={styles.countrySearchRow}>
+                  <Ionicons name="search" size={16} color={Theme.colors.textSecondary} style={{ marginRight: 8 }} />
+                  <TextInput
+                    style={styles.countrySearchInput}
+                    placeholder="Search country or dial code..."
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    value={countrySearch}
+                    onChangeText={setCountrySearch}
+                    autoCorrect={false}
+                  />
+                  {countrySearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setCountrySearch('')}>
+                      <Ionicons name="close-circle" size={16} color={Theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+
+                {/* Country List */}
+                <ScrollView style={styles.countryList} keyboardShouldPersistTaps="handled">
+                  {COUNTRY_CODES.filter((c) => {
+                    const query = countrySearch.trim().toLowerCase();
+                    if (!query) return true;
+                    return (
+                      c.name.toLowerCase().includes(query) ||
+                      c.dialCode.includes(query) ||
+                      c.code.toLowerCase().includes(query)
+                    );
+                  }).map((item) => {
+                    const isSelected = item.dialCode === customerDialCode;
+                    return (
+                      <TouchableOpacity
+                        key={`${item.code}-${item.dialCode}`}
+                        style={[styles.countryItemRow, isSelected && styles.countryItemRowSelected]}
+                        onPress={() => {
+                          triggerHaptic.selection();
+                          setCustomerDialCode(item.dialCode);
+                          setShowCountryPicker(false);
+                        }}
+                      >
+                        <Text style={styles.countryItemFlag}>{item.flag}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.countryItemName, isSelected && styles.countryItemNameSelected]}>
+                            {item.name}
+                          </Text>
+                          <Text style={styles.countryItemSub}>{item.code}</Text>
+                        </View>
+                        <Text style={[styles.countryItemDial, isSelected && styles.countryItemDialSelected]}>
+                          {item.dialCode}
+                        </Text>
+                        {isSelected && (
+                          <Ionicons
+                            name="checkmark-circle"
+                            size={18}
+                            color={Theme.colors.deepRose}
+                            style={{ marginLeft: 8 }}
+                          />
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+          </Modal>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1787,14 +1902,119 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Theme.colors.border,
     borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     marginTop: 8,
+  },
+  countryCodePickerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F7F4EF',
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  countryCodeFlag: {
+    fontSize: 16,
+    marginRight: 4,
+  },
+  countryCodeText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  phoneDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: Theme.colors.border,
+    marginRight: 8,
   },
   phoneInput: {
     flex: 1,
     fontSize: 14,
     color: Theme.colors.textDark,
+    paddingVertical: 4,
+  },
+  countryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    justifyContent: 'flex-end',
+  },
+  countryModalCard: {
+    backgroundColor: Theme.colors.white,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: Platform.OS === 'ios' ? 36 : 20,
+    maxHeight: '80%',
+  },
+  countryModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  countryModalTitle: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  countrySearchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 12,
+  },
+  countrySearchInput: {
+    flex: 1,
+    fontSize: 14,
+    color: Theme.colors.textDark,
+  },
+  countryList: {
+    maxHeight: 380,
+  },
+  countryItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0ECE4',
+  },
+  countryItemRowSelected: {
+    backgroundColor: '#FFF0F3',
+    borderRadius: 8,
+  },
+  countryItemFlag: {
+    fontSize: 22,
+    marginRight: 12,
+  },
+  countryItemName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  countryItemNameSelected: {
+    color: Theme.colors.deepRose,
+    fontWeight: '700',
+  },
+  countryItemSub: {
+    fontSize: 11,
+    color: Theme.colors.textSecondary,
+    marginTop: 1,
+  },
+  countryItemDial: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  countryItemDialSelected: {
+    color: Theme.colors.deepRose,
   },
   textArea: {
     height: 80,
