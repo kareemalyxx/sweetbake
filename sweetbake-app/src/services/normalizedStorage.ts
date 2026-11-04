@@ -131,7 +131,7 @@ export const NormalizedStorage = {
       reminder: legacy.reminderEnabled
         ? {
             enabled: true,
-            timing: (legacy.reminderTimings?.[0] as ReminderTiming) || '1_hour',
+            timing: ((legacy.reminders && Object.keys(legacy.reminders)[0]) as ReminderTiming) || '1_hour',
           }
         : undefined,
       createdAt: legacy.createdAt || new Date().toISOString(),
@@ -161,8 +161,6 @@ export const NormalizedStorage = {
             [norm.reminder.timing]: norm.fulfillment.scheduledTime,
           }
         : undefined,
-      reminderTimings: norm.reminder?.enabled ? [norm.reminder.timing] : [],
-      customReminderDates: [],
       referenceImages: norm.referenceImages,
       createdAt: norm.createdAt,
     };

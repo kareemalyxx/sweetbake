@@ -35,11 +35,7 @@ export interface CakeOrder {
   deliveryPhone?: string; // Contact phone number for delivery driver/company
   deliveryHandoverTime?: string; // When to hand the cake over to driver (ISO string or time note)
   reminderEnabled?: boolean; // In-app reminder active
-  reminders?: Record<string, string>; // Map of reminder label -> trigger timestamp ISO string (e.g. {"1_hour": "...", "custom_1": "..."})
-  // Flat properties maintained for backward-compatibility & direct access:
-  reminderTimings?: ReminderTiming[];
-  customReminderDates?: string[];
-  notificationTimestamps?: string[];
+  reminders?: Record<string, string>; // Map of reminder label -> trigger timestamp ISO string (e.g. {"1_hour": "...", "Custom Alert 1": "..."})
   referenceImages: string[]; // Base64 or local file URIs
   createdAt: string;
 }

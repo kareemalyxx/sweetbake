@@ -172,16 +172,16 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setDeliveryPhone(orderToEdit.deliveryPhone || '');
       setDeliveryHandoverDate(orderToEdit.deliveryHandoverTime ? new Date(orderToEdit.deliveryHandoverTime) : null);
       setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
-      const editTimings = orderToEdit.reminders?.reminderTimings || orderToEdit.reminderTimings;
-      if (Array.isArray(editTimings) && editTimings.length > 0) {
-        setReminderTimings(editTimings);
-      } else {
-        setReminderTimings(['1_hour']);
-      }
-      const editCustomDates = orderToEdit.reminders?.customReminderDates || orderToEdit.customReminderDates;
-      setCustomReminderDates(
-        Array.isArray(editCustomDates) ? editCustomDates : []
-      );
+      const remindersObj = orderToEdit.reminders || {};
+      const parsedTimings = Object.keys(remindersObj).filter((k) =>
+        ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)
+      ) as ReminderTiming[];
+      setReminderTimings(parsedTimings.length > 0 ? parsedTimings : ['1_hour']);
+
+      const parsedCustomDates = Object.entries(remindersObj)
+        .filter(([k]) => k.startsWith('Custom Alert') || k.startsWith('custom_'))
+        .map(([, v]) => v);
+      setCustomReminderDates(parsedCustomDates);
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
@@ -571,8 +571,6 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       deliveryHandoverTime: fulfillmentType === 'Delivery' && deliveryHandoverDate ? deliveryHandoverDate.toISOString() : undefined,
       reminderEnabled,
       reminders: remindersMap,
-      reminderTimings: reminderEnabled ? reminderTimings : [],
-      customReminderDates: reminderEnabled ? customReminderDates : [],
       customRequirements: customRequirements.trim(),
       deliveryDate: deliveryDate.toISOString(),
       referenceImages,

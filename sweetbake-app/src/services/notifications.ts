@@ -232,22 +232,21 @@ export const NotificationService = {
     // Cancel existing native phone alerts for this order to avoid duplicates
     await this.cancelOrderReminder(order.id);
 
-    // Determine the list of timings chosen (supports multiple)
-    let timingsToSchedule: ReminderTiming[] = [];
-    const sourceTimings = order.reminders?.reminderTimings || order.reminderTimings;
-    if (Array.isArray(sourceTimings) && sourceTimings.length > 0) {
-      timingsToSchedule = sourceTimings;
-    } else {
-      timingsToSchedule = ['1_hour'];
-    }
+    const remindersObj = order.reminders || {};
+
+    // 1. Standard Offset Reminders from `reminders` map (e.g. '15_min', '1_hour')
+    const timingsToSchedule = Object.keys(remindersObj).filter((k) =>
+      ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)
+    ) as ReminderTiming[];
 
     const orderTime = new Date(order.deliveryDate).getTime();
     const newNotifications: InAppNotification[] = [];
 
-    for (const timing of timingsToSchedule) {
+    for (const timing of (timingsToSchedule.length > 0 ? timingsToSchedule : (['1_hour'] as ReminderTiming[]))) {
       const offsetMs = this.getTimingOffsetMs(timing);
-      // Precise timestamp calculation: e.g. 2:00 PM (14:00) - 15 min = 1:45 PM (13:45)
-      const triggerTimestamp = orderTime - offsetMs;
+      const triggerTimestamp = remindersObj[timing]
+        ? new Date(remindersObj[timing]).getTime()
+        : orderTime - offsetMs;
       const triggerDate = new Date(triggerTimestamp);
       const timingLabel = this.getTimingDisplay(timing);
       const title = `🎂 SweetBake Alert: ${order.customerName}`;
@@ -281,50 +280,52 @@ export const NotificationService = {
       });
     }
 
-    // Also schedule any custom specific date & time reminders picked by user
-    if (Array.isArray(order.customReminderDates) && order.customReminderDates.length > 0) {
-      for (let idx = 0; idx < order.customReminderDates.length; idx++) {
-        const customIso = order.customReminderDates[idx];
-        const customDate = new Date(customIso);
-        if (!isNaN(customDate.getTime())) {
-          const timingLabel = customDate.toLocaleString(undefined, {
-            month: 'short',
-            day: 'numeric',
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: true,
-          });
+    // 2. Custom Date & Time Alerts from `reminders` map (e.g. 'Custom Alert 1')
+    const customEntries = Object.entries(remindersObj).filter(
+      ([k]) => k.startsWith('Custom Alert') || k.startsWith('custom_')
+    );
 
-          const title = `🎂 SweetBake Alert: ${order.customerName}`;
-          const message = `Order reminder for ${order.customerName} (${timingLabel})`;
+    for (let idx = 0; idx < customEntries.length; idx++) {
+      const [customKey, customIso] = customEntries[idx];
+      const customDate = new Date(customIso);
+      if (!isNaN(customDate.getTime())) {
+        const timingLabel = customDate.toLocaleString(undefined, {
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+          hour12: true,
+        });
 
-          // Schedule native phone alert
-          let systemNotificationId: string | undefined;
-          if (customDate.getTime() > Date.now()) {
-            const sysId = await this.schedulePhoneAlert(customDate, title, message, {
-              orderId: order.id,
-              customIso,
-            });
-            if (sysId) systemNotificationId = sysId;
-          }
+        const title = `🎂 SweetBake Alert: ${order.customerName}`;
+        const message = `Order reminder for ${order.customerName} (${timingLabel})`;
 
-          newNotifications.push({
-            id: `remind-${order.id}-custom-${idx}`,
+        // Schedule native phone alert
+        let systemNotificationId: string | undefined;
+        if (customDate.getTime() > Date.now()) {
+          const sysId = await this.schedulePhoneAlert(customDate, title, message, {
             orderId: order.id,
-            customerName: order.customerName,
-            customerPhone: order.customerPhone,
-            triggerTime: customDate.toISOString(),
-            deliveryDate: order.deliveryDate,
-            fulfillmentType: order.fulfillmentType || 'Pickup',
-            location: order.location,
-            message,
-            timing: 'custom',
-            timingLabel: `At ${timingLabel}`,
-            isRead: false,
-            createdAt: new Date().toISOString(),
-            systemNotificationId,
+            customIso,
           });
+          if (sysId) systemNotificationId = sysId;
         }
+
+        newNotifications.push({
+          id: `remind-${order.id}-${customKey.replace(/\s+/g, '-').toLowerCase()}`,
+          orderId: order.id,
+          customerName: order.customerName,
+          customerPhone: order.customerPhone,
+          triggerTime: customDate.toISOString(),
+          deliveryDate: order.deliveryDate,
+          fulfillmentType: order.fulfillmentType || 'Pickup',
+          location: order.location,
+          message,
+          timing: 'custom',
+          timingLabel,
+          isRead: false,
+          createdAt: new Date().toISOString(),
+          systemNotificationId,
+        });
       }
     }
 

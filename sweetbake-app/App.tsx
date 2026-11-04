@@ -171,8 +171,6 @@ export default function App() {
         deliveryHandoverTime: orderData.deliveryHandoverTime,
         reminderEnabled: Boolean(orderData.reminderEnabled),
         reminders: orderData.reminders || {},
-        reminderTimings: orderData.reminderTimings || ['1_hour'],
-        customReminderDates: orderData.customReminderDates || [],
         referenceImages: orderData.referenceImages || [],
         createdAt: new Date().toISOString(),
       };

@@ -33,9 +33,6 @@ service cloud.firestore {
     //   - location: string (optional, 0..300 chars)
     //   - reminderEnabled: bool (optional)
     //   - reminders: map of reminder labels to trigger timestamps/ISO dates (optional, max 20 entries)
-    //   - reminderTimings: list of strings (optional, legacy support, max 10 items)
-    //   - customReminderDates: list of strings (optional, legacy support, max 10 items)
-    //   - notificationTimestamps: list of strings (optional, legacy support, max 10 items)
     //   - addons: map of addon name to boolean status (optional, max 30 entries) or legacy list of strings
     //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
     //   - createdAt: timestamp or string (required on create, immutable)
@@ -135,8 +132,8 @@ service cloud.firestore {
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location',
         'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
-        'reminderEnabled', 'reminders', 'reminderTimings', 'customReminderDates',
-        'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
+        'reminderEnabled', 'reminders', 'addons', 'referenceImages',
+        'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
       let validFulfillment = ['Pickup', 'Delivery'];
@@ -167,9 +164,6 @@ service cloud.firestore {
         (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
         (!('reminders' in data) || (data.reminders is map && data.reminders.size() <= 20)) &&
-        (!('reminderTimings' in data) || (data.reminderTimings is list && data.reminderTimings.size() <= 10)) &&
-        (!('customReminderDates' in data) || (data.customReminderDates is list && data.customReminderDates.size() <= 10)) &&
-        (!('notificationTimestamps' in data) || (data.notificationTimestamps is list && data.notificationTimestamps.size() <= 10)) &&
         (!('addons' in data) || (data.addons is map && data.addons.size() <= 30) || (data.addons is list && data.addons.size() <= 30)) &&
         (!('referenceImages' in data) || (data.referenceImages is list && data.referenceImages.size() <= 10)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&

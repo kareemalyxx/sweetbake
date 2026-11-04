@@ -108,9 +108,6 @@ export const FirestoreService = {
         createdAt: toIsoDate(raw.createdAt),
         updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
         deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
-        reminderTimings,
-        customReminderDates,
-        notificationTimestamps,
         reminders: remindersParsed,
         expenses: Array.isArray(raw.expenses)
           ? raw.expenses.map((e: any) => ({
@@ -180,9 +177,6 @@ export const FirestoreService = {
           createdAt: toIsoDate(raw.createdAt),
           updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
           deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
-          reminderTimings,
-          customReminderDates,
-          notificationTimestamps,
           reminders: remindersParsed,
           expenses: Array.isArray(raw.expenses)
             ? raw.expenses.map((e: any) => ({
@@ -212,39 +206,24 @@ export const FirestoreService = {
 
     // Calculate notification timestamps and build the key-value reminders map:
     // e.g. "1_hour": Timestamp, "15_min": Timestamp, "Custom Alert 1": Timestamp
-    const deliveryMs = new Date(order.deliveryDate).getTime();
-    const timings: ReminderTiming[] = Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0
-      ? order.reminderTimings
-      : (order.reminders ? (Object.keys(order.reminders).filter((k) => ['15_min', '1_hour', '2_hours', '1_day', 'on_time'].includes(k)) as ReminderTiming[]) : []);
-
-    const offsetMap: Record<ReminderTiming, number> = {
-      '15_min': 15 * 60 * 1000,
-      '1_hour': 60 * 60 * 1000,
-      '2_hours': 2 * 60 * 60 * 1000,
-      '1_day': 24 * 60 * 60 * 1000,
-      'on_time': 0,
-    };
-
-    // Stored as native Firebase Timestamps in reminders map: key is label, value is timestamp
     const remindersMap: Record<string, Timestamp> = {};
+    const remindersInput = order.reminders || {};
 
-    timings.forEach((timing) => {
-      const triggerMs = deliveryMs - (offsetMap[timing] ?? 0);
-      remindersMap[timing] = Timestamp.fromMillis(triggerMs);
-    });
-
-    const customReminderDates = order.customReminderDates || [];
-    customReminderDates.forEach((iso, idx) => {
-      const d = new Date(iso);
-      if (!isNaN(d.getTime())) {
-        remindersMap[`Custom Alert ${idx + 1}`] = Timestamp.fromDate(d);
+    Object.entries(remindersInput).forEach(([label, dateVal]) => {
+      if (dateVal) {
+        remindersMap[label] = toFirebaseTimestamp(dateVal);
       }
     });
 
-    const notificationTimestamps = Object.values(remindersMap);
-
-    // Omit expenses and legacy reminderTiming from the order document
-    const { expenses: _expenses, reminderTiming: _timing, ...orderWithoutExpenses } = order as any;
+    // Omit expenses and legacy fields from the order document
+    const {
+      expenses: _expenses,
+      reminderTiming: _timing,
+      reminderTimings: _timings,
+      customReminderDates: _customDates,
+      notificationTimestamps: _notifs,
+      ...orderWithoutExpenses
+    } = order as any;
 
     // Clean all undefined values to prevent Firestore 'Unsupported field value: undefined' errors
     const cleanedOrder: Record<string, any> = {};
@@ -261,9 +240,6 @@ export const FirestoreService = {
       updatedAt: Timestamp.now(),
       // Single Map to store all reminder configuration where label is key and value is Timestamp
       reminders: remindersMap,
-      reminderTimings: timings,
-      customReminderDates: customReminderDates,
-      notificationTimestamps,
     };
 
     if (order.deliveryHandoverTime) {
