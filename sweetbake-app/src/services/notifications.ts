@@ -65,7 +65,7 @@ export const NotificationService = {
     });
 
     const lines = [
-      `🎂 *SweetBake Studio Order Update*`,
+      `🎂 *Kake Studio Order Update*`,
       `Hi ${order.customerName}! Here are the details for your custom cake commission:`,
       ``,
       `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${order.flavor || 'Custom'})`,
@@ -85,7 +85,7 @@ export const NotificationService = {
     }
 
     lines.push(``);
-    lines.push(`Let us know if you need any adjustments. Thank you for baking with SweetBake Studio!`);
+    lines.push(`Let us know if you need any adjustments. Thank you for baking with kake Studio!`);
 
     const message = lines.join('\n');
     const cleanPhone = (order.customerPhone || '').replace(/[^0-9+]/g, '');
