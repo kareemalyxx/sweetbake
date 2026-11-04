@@ -255,7 +255,24 @@ export const FirestoreService = {
       dataToSave.deliveryPhone = order.deliveryPhone;
     }
 
-    await setDoc(orderRef, dataToSave, { merge: true });
+    // Strict whitelist according to firestore.rules isValidOrder
+    const ALLOWED_ORDER_KEYS = new Set([
+      'id', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'shape', 'flavor',
+      'customRequirements', 'status', 'quotedPrice', 'downPayment',
+      'remainingPayment', 'fulfillmentType', 'location',
+      'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
+      'reminderEnabled', 'reminders', 'addons', 'referenceImages',
+      'createdAt', 'updatedAt', 'userId'
+    ]);
+
+    const sanitizedData: Record<string, any> = {};
+    Object.entries(dataToSave).forEach(([k, v]) => {
+      if (ALLOWED_ORDER_KEYS.has(k) && v !== undefined) {
+        sanitizedData[k] = v;
+      }
+    });
+
+    await setDoc(orderRef, sanitizedData, { merge: true });
   },
 
   /**

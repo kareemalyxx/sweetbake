@@ -153,6 +153,8 @@ export default function App() {
       const newOrder: CakeOrder = {
         id: targetOrderId,
         customerName: orderData.customerName || 'Anonymous',
+        customerPhone: orderData.customerPhone,
+        customerInstagram: orderData.customerInstagram,
         deliveryDate: orderData.deliveryDate || new Date().toISOString(),
         cakeType: orderData.cakeType || 'Celebration Cake',
         shape: orderData.shape || 'Round',
