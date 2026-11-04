@@ -142,7 +142,7 @@ service cloud.firestore {
       let validFulfillment = ['Pickup', 'Delivery'];
 
       return hasOnlyAllowedFields(allowed) &&
-        hasRequiredFields(['customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'status', 'quotedPrice', 'createdAt']) &&
+        hasRequiredFields(['customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'status', 'quotedPrice']) &&
         // Required field validations
         data.customerName is string && data.customerName.size() > 0 && data.customerName.size() <= 150 &&
         isValidTimestampOrIsoDate(data.deliveryDate) &&
@@ -151,7 +151,7 @@ service cloud.firestore {
         data.flavor is string && data.flavor.size() > 0 && data.flavor.size() <= 100 &&
         data.status in validStatuses &&
         data.quotedPrice is number && data.quotedPrice >= 0 && data.quotedPrice <= 1000000 &&
-        isValidTimestampOrIsoDate(data.createdAt) &&
+        (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&
         // Optional field validations
         (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
         (!('customRequirements' in data) || (data.customRequirements is string && data.customRequirements.size() <= 3000)) &&
@@ -230,7 +230,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidOrder(request.resource.data);
       allow update: if isValidOrder(request.resource.data) &&
-        areImmutableFieldsUnchanged(['createdAt', 'id']);
+        areImmutableFieldsUnchanged(['id']);
       allow delete: if true;
     }
 
@@ -262,7 +262,7 @@ service cloud.firestore {
       match /orders/{orderId} {
         allow read: if isOwner(userId);
         allow create: if isOwner(userId) && isValidOrder(request.resource.data);
-        allow update: if isOwner(userId) && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['createdAt', 'id']);
+        allow update: if isOwner(userId) && isValidOrder(request.resource.data) && areImmutableFieldsUnchanged(['id']);
         allow delete: if isOwner(userId);
       }
 
