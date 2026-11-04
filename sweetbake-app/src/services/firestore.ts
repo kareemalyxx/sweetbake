@@ -7,6 +7,11 @@ import {
   onSnapshot,
   query,
   orderBy,
+  where,
+  limit,
+  startAfter,
+  QueryDocumentSnapshot,
+  DocumentData,
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
@@ -54,14 +59,15 @@ function toFirebaseTimestamp(val: any): Timestamp {
 
 export const FirestoreService = {
   /**
-   * Listen to real-time updates for bakery cake orders (direct root collection)
+   * Listen to real-time updates for bakery cake orders with pagination limit (default 25)
    */
   subscribeToOrders(
     onSuccess: (orders: CakeOrder[]) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    pageSize: number = 25
   ): () => void {
     const ordersCol = collection(db, 'orders');
-    const q = query(ordersCol, orderBy('createdAt', 'desc'));
+    const q = query(ordersCol, orderBy('createdAt', 'desc'), limit(pageSize));
 
     return onSnapshot(
       q,
@@ -94,12 +100,19 @@ export const FirestoreService = {
   },
 
   /**
-   * Fetch orders once from Firestore (with local cache fallback)
+   * Fetch paginated orders once from Firestore (with local cache fallback)
    */
-  async getOrders(): Promise<CakeOrder[]> {
+  async getOrders(
+    pageSize: number = 25,
+    lastDoc?: QueryDocumentSnapshot<DocumentData>
+  ): Promise<{ orders: CakeOrder[]; lastVisible?: QueryDocumentSnapshot<DocumentData> }> {
     try {
       const ordersCol = collection(db, 'orders');
-      const q = query(ordersCol, orderBy('createdAt', 'desc'));
+      let q = query(ordersCol, orderBy('createdAt', 'desc'), limit(pageSize));
+      if (lastDoc) {
+        q = query(ordersCol, orderBy('createdAt', 'desc'), startAfter(lastDoc), limit(pageSize));
+      }
+
       const snapshot = await getDocs(q);
       const orders: CakeOrder[] = [];
       snapshot.forEach((docSnap) => {
@@ -118,12 +131,15 @@ export const FirestoreService = {
             : [],
         });
       });
-      await AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders));
-      return orders;
+      const lastVisible = snapshot.docs[snapshot.docs.length - 1];
+      if (!lastDoc) {
+        AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders)).catch(() => {});
+      }
+      return { orders, lastVisible };
     } catch (err) {
       console.warn('Failed to fetch from Firestore, checking offline cache:', err);
       const cached = await AsyncStorage.getItem(ORDERS_CACHE_KEY);
-      return cached ? JSON.parse(cached) : [];
+      return { orders: cached ? JSON.parse(cached) : [] };
     }
   },
 
@@ -156,14 +172,21 @@ export const FirestoreService = {
   },
 
   /**
-   * Listen to real-time updates for bakery checklist requirements (direct root collection)
+   * Listen to real-time updates for bakery checklist requirements (only active uncompleted items)
+   * Drastically reduces Firestore reads by ignoring historical completed checklist items.
    */
   subscribeToRequirements(
     onSuccess: (reqs: GeneralRequirement[]) => void,
-    onError?: (err: Error) => void
+    onError?: (err: Error) => void,
+    maxLimit: number = 100
   ): () => void {
     const reqsCol = collection(db, 'requirements');
-    const q = query(reqsCol, orderBy('createdAt', 'desc'));
+    // Query only uncompleted items, limit to active items to keep reads minimal
+    const q = query(
+      reqsCol,
+      where('isCompleted', '==', false),
+      limit(maxLimit)
+    );
 
     return onSnapshot(
       q,
@@ -179,6 +202,10 @@ export const FirestoreService = {
             updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
           });
         });
+
+        // Sort descending in-memory to avoid needing composite Firestore index (isCompleted + createdAt)
+        reqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
         AsyncStorage.setItem(REQS_CACHE_KEY, JSON.stringify(reqs)).catch(() => {});
         onSuccess(reqs);
       },
@@ -190,12 +217,16 @@ export const FirestoreService = {
   },
 
   /**
-   * Fetch requirements once
+   * Fetch uncompleted requirements once
    */
-  async getRequirements(): Promise<GeneralRequirement[]> {
+  async getRequirements(maxLimit: number = 100): Promise<GeneralRequirement[]> {
     try {
       const reqsCol = collection(db, 'requirements');
-      const q = query(reqsCol, orderBy('createdAt', 'desc'));
+      const q = query(
+        reqsCol,
+        where('isCompleted', '==', false),
+        limit(maxLimit)
+      );
       const snapshot = await getDocs(q);
       const reqs: GeneralRequirement[] = [];
       snapshot.forEach((docSnap) => {
@@ -208,6 +239,10 @@ export const FirestoreService = {
           updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
         });
       });
+
+      // In-memory sort
+      reqs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
       await AsyncStorage.setItem(REQS_CACHE_KEY, JSON.stringify(reqs));
       return reqs;
     } catch (err) {
