@@ -6,6 +6,7 @@ import {
   FlatList,
   TextInput,
   TouchableOpacity,
+  ScrollView,
   LayoutAnimation,
   Platform,
   UIManager,
@@ -20,12 +21,14 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
+type FilterCategory = RequirementCategory | 'All';
+
 interface BusinessNeedsScreenProps {
   requirements: GeneralRequirement[];
   onToggleRequirement: (id: string) => void;
   onAddRequirement: (title: string, category: RequirementCategory) => void;
   onDeleteRequirement: (id: string) => void;
-  onClearCompleted: (category: RequirementCategory) => void;
+  onClearCompleted: (category?: RequirementCategory) => void;
 }
 
 export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
@@ -35,11 +38,13 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
   onDeleteRequirement,
   onClearCompleted,
 }) => {
-  const [selectedCategory, setSelectedCategory] = useState<RequirementCategory>('Add-ons');
+  const [selectedCategory, setSelectedCategory] = useState<FilterCategory>('All');
   const [newTitle, setNewTitle] = useState('');
 
-  // Strict per-item segregation:
-  const categoryItems = requirements.filter((r) => r.category === selectedCategory);
+  // Strict per-item segregation or all items:
+  const categoryItems = selectedCategory === 'All'
+    ? requirements
+    : requirements.filter((r) => r.category === selectedCategory);
   const uncompleted = categoryItems.filter((r) => !r.isCompleted);
   const completed = categoryItems.filter((r) => r.isCompleted);
   const sortedItems = [...uncompleted, ...completed];
@@ -48,7 +53,8 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
     if (!newTitle.trim()) return;
     triggerHaptic.light();
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    onAddRequirement(newTitle.trim(), selectedCategory);
+    const targetCat: RequirementCategory = selectedCategory === 'All' ? 'Add-ons' : selectedCategory;
+    onAddRequirement(newTitle.trim(), targetCat);
     setNewTitle('');
   };
 
@@ -58,8 +64,10 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
     onToggleRequirement(id);
   };
 
-  const getCategoryIcon = (cat: RequirementCategory) => {
+  const getCategoryIcon = (cat: FilterCategory) => {
     switch (cat) {
+      case 'All':
+        return 'layers-outline' as const;
       case 'Add-ons':
         return 'sparkles' as const;
       case 'Ingredients':
@@ -71,54 +79,62 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
     }
   };
 
+  const categories: FilterCategory[] = ['All', 'Add-ons', 'Ingredients', 'Packaging', 'Tools'];
+
   return (
     <View style={styles.container}>
-      {/* Category Tabs with Add-ons first */}
-      <View style={styles.categoryRow}>
-        {(['Add-ons', 'Ingredients', 'Packaging', 'Tools'] as RequirementCategory[]).map((cat) => {
-          const isSelected = selectedCategory === cat;
-          const pendingCount = requirements.filter(
-            (r) => r.category === cat && !r.isCompleted
-          ).length;
+      {/* Scrollable Category Tabs with "All" first */}
+      <View style={styles.categoryRowWrapper}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryRow}
+        >
+          {categories.map((cat) => {
+            const isSelected = selectedCategory === cat;
+            const pendingCount = cat === 'All'
+              ? requirements.filter((r) => !r.isCompleted).length
+              : requirements.filter((r) => r.category === cat && !r.isCompleted).length;
 
-          return (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.catTab, isSelected && styles.catTabActive]}
-              onPress={() => {
-                triggerHaptic.selection();
-                setSelectedCategory(cat);
-              }}
-            >
-              <Ionicons
-                name={getCategoryIcon(cat)}
-                size={14}
-                color={isSelected ? '#FFFFFF' : Theme.colors.textDark}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.catTabText, isSelected && styles.catTabTextActive]}>
-                {cat}
-              </Text>
-              {pendingCount > 0 && (
-                <View
-                  style={[
-                    styles.pendingBadge,
-                    isSelected ? styles.pendingBadgeActive : styles.pendingBadgeInactive,
-                  ]}
-                >
-                  <Text
+            return (
+              <TouchableOpacity
+                key={cat}
+                style={[styles.catTab, isSelected && styles.catTabActive]}
+                onPress={() => {
+                  triggerHaptic.selection();
+                  setSelectedCategory(cat);
+                }}
+              >
+                <Ionicons
+                  name={getCategoryIcon(cat)}
+                  size={14}
+                  color={isSelected ? '#FFFFFF' : Theme.colors.textDark}
+                  style={{ marginRight: 4 }}
+                />
+                <Text style={[styles.catTabText, isSelected && styles.catTabTextActive]}>
+                  {cat}
+                </Text>
+                {pendingCount > 0 && (
+                  <View
                     style={[
-                      styles.pendingBadgeText,
-                      isSelected && { color: Theme.colors.deepRose },
+                      styles.pendingBadge,
+                      isSelected ? styles.pendingBadgeActive : styles.pendingBadgeInactive,
                     ]}
                   >
-                    {pendingCount}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
+                    <Text
+                      style={[
+                        styles.pendingBadgeText,
+                        isSelected && { color: Theme.colors.deepRose },
+                      ]}
+                    >
+                      {pendingCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Quick Add Bar for To-Do item */}
@@ -131,7 +147,11 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         />
         <TextInput
           style={styles.textInput}
-          placeholder={`Add new ${selectedCategory === 'Add-ons' ? 'Add-on requirement' : selectedCategory.toLowerCase()}...`}
+          placeholder={
+            selectedCategory === 'All'
+              ? 'Add new requirement (defaults to Add-ons)...'
+              : `Add new ${selectedCategory === 'Add-ons' ? 'Add-on requirement' : selectedCategory.toLowerCase()}...`
+          }
           placeholderTextColor={Theme.colors.textSecondary}
           value={newTitle}
           onChangeText={setNewTitle}
@@ -151,7 +171,9 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
           {uncompleted.length} to do • {completed.length} completed
         </Text>
         {completed.length > 0 && (
-          <TouchableOpacity onPress={() => onClearCompleted(selectedCategory)}>
+          <TouchableOpacity
+            onPress={() => onClearCompleted(selectedCategory === 'All' ? undefined : selectedCategory)}
+          >
             <Text style={styles.clearDoneText}>Clear done</Text>
           </TouchableOpacity>
         )}
@@ -165,8 +187,12 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <EmptyState
-            title={`No ${selectedCategory} To-Dos`}
-            subtitle={`All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`}
+            title={selectedCategory === 'All' ? 'No To-Dos' : `No ${selectedCategory} To-Dos`}
+            subtitle={
+              selectedCategory === 'All'
+                ? 'All bakery requirements and commission add-ons are prepped and completed!'
+                : `All ${selectedCategory.toLowerCase()} items for commissions are prepped and completed!`
+            }
           />
         }
         renderItem={({ item }) => (
@@ -197,12 +223,15 @@ export const BusinessNeedsScreen: React.FC<BusinessNeedsScreenProps> = ({
               >
                 {item.title}
               </Text>
-              {item.category === 'Add-ons' && (
-                <View style={styles.addonTag}>
-                  <Ionicons name="sparkles" size={10} color={Theme.colors.deepRose} style={{ marginRight: 3 }} />
-                  <Text style={styles.addonTagText}>Add-on Requirement</Text>
-                </View>
-              )}
+              <View style={styles.addonTag}>
+                <Ionicons
+                  name={getCategoryIcon(item.category)}
+                  size={10}
+                  color={Theme.colors.deepRose}
+                  style={{ marginRight: 3 }}
+                />
+                <Text style={styles.addonTagText}>{item.category}</Text>
+              </View>
             </View>
 
             <TouchableOpacity
@@ -226,20 +255,21 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Theme.colors.cream,
   },
+  categoryRowWrapper: {
+    paddingVertical: 10,
+  },
   categoryRow: {
     flexDirection: 'row',
     paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
     gap: 8,
   },
   catTab: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Theme.colors.white,
-    paddingVertical: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
     borderRadius: Theme.borderRadius.button,
     borderWidth: 1,
     borderColor: Theme.colors.border,

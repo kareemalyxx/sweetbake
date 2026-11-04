@@ -307,11 +307,13 @@ export default function App() {
     FirestoreService.deleteRequirement(id).catch(() => {});
   };
 
-  const handleClearCompleted = async (category: RequirementCategory) => {
+  const handleClearCompleted = async (category?: RequirementCategory) => {
     const completedIds = requirements
-      .filter((r) => r.category === category && r.isCompleted)
+      .filter((r) => (category ? r.category === category : true) && r.isCompleted)
       .map((r) => r.id);
-    const updated = requirements.filter((r) => !(r.category === category && r.isCompleted));
+    const updated = requirements.filter(
+      (r) => !(category ? r.category === category && r.isCompleted : r.isCompleted)
+    );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
     completedIds.forEach((id) => FirestoreService.deleteRequirement(id).catch(() => {}));
