@@ -8,6 +8,8 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  Image,
+  Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus, OrderExpense } from './src/types';
@@ -38,6 +40,24 @@ export default function App() {
   const [allReminders, setAllReminders] = useState<InAppNotification[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // App Splash Screen (runs for 3 seconds)
+  const [showSplash, setShowSplash] = useState(true);
+  const splashOpacity = useState(new Animated.Value(1))[0];
+
+  useEffect(() => {
+    const splashTimer = setTimeout(() => {
+      Animated.timing(splashOpacity, {
+        toValue: 0,
+        duration: 400,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowSplash(false);
+      });
+    }, 2600); // fades out so total splash experience is 3.0 seconds
+
+    return () => clearTimeout(splashTimer);
+  }, []);
 
   useEffect(() => {
     const unsub = AuthService.subscribeToAuthChanges((u) => setCurrentUser(u));
@@ -455,7 +475,11 @@ export default function App() {
         ]}
       >
         <View style={styles.brandRow}>
-          <Text style={styles.brandEmoji}>🎂</Text>
+          <Image
+            source={require('./assets/icon.png')}
+            style={styles.brandLogoImage}
+            resizeMode="cover"
+          />
           <View>
             <Text
               style={[styles.brandTitle, { color: Theme.colors.textDark }]}
@@ -958,6 +982,27 @@ export default function App() {
         onClose={() => setShowAuthModal(false)}
         currentUserEmail={currentUser ? currentUser.email : null}
       />
+
+      {/* 3-Second App Splash Screen */}
+      {showSplash && (
+        <Animated.View style={[styles.splashOverlay, { opacity: splashOpacity }]}>
+          <StatusBar barStyle="light-content" />
+          <Image
+            source={require('./assets/custom-splash.jpg')}
+            style={styles.splashImage}
+            resizeMode="cover"
+          />
+          <View style={styles.splashGradientOverlay}>
+            <Image
+              source={require('./assets/icon.png')}
+              style={styles.splashLogoBadge}
+              resizeMode="cover"
+            />
+            <Text style={styles.splashBrandTitle}>SweetBake Studio</Text>
+            <Text style={styles.splashBrandSubtitle}>Crafted with Love & Sugar</Text>
+          </View>
+        </Animated.View>
+      )}
     </SafeAreaView>
   );
 }
@@ -978,10 +1023,14 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  brandEmoji: {
-    fontSize: 24,
+  brandLogoImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    borderColor: Theme.colors.deepRose,
   },
   brandTitle: {
     fontSize: 17,
@@ -1193,5 +1242,50 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '700',
+  },
+  splashOverlay: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#000000',
+    zIndex: 9999,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  splashImage: {
+    ...StyleSheet.absoluteFill,
+    width: '100%',
+    height: '100%',
+  },
+  splashGradientOverlay: {
+    position: 'absolute',
+    bottom: 60,
+    left: 20,
+    right: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
+  },
+  splashLogoBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    marginBottom: 10,
+  },
+  splashBrandTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  splashBrandSubtitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255, 255, 255, 0.85)',
+    marginTop: 4,
   },
 });
