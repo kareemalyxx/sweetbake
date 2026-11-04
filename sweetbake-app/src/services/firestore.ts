@@ -76,23 +76,41 @@ export const FirestoreService = {
         const orders: CakeOrder[] = [];
         snapshot.forEach((docSnap) => {
           const raw = docSnap.data();
-          orders.push({
-            id: docSnap.id,
-            ...(raw as any),
-            deliveryDate: toIsoDate(raw.deliveryDate),
-            createdAt: toIsoDate(raw.createdAt),
-            updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
-            deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
-            notificationTimestamps: Array.isArray(raw.notificationTimestamps)
-              ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
-              : undefined,
-            expenses: Array.isArray(raw.expenses)
-              ? raw.expenses.map((e: any) => ({
-                  ...e,
-                  date: toIsoDate(e.date),
-                }))
-              : undefined,
-          });
+      // Map raw reminders if stored in map format
+      const rawReminders = raw.reminders;
+      const reminderTimings = Array.isArray(rawReminders?.reminderTimings)
+        ? rawReminders.reminderTimings
+        : (Array.isArray(raw.reminderTimings) ? raw.reminderTimings : []);
+      const customReminderDates = Array.isArray(rawReminders?.customReminderDates)
+        ? rawReminders.customReminderDates
+        : (Array.isArray(raw.customReminderDates) ? raw.customReminderDates : []);
+      const rawTimestamps = rawReminders?.notificationTimestamps || raw.notificationTimestamps;
+      const notificationTimestamps = Array.isArray(rawTimestamps)
+        ? rawTimestamps.map((t: any) => toIsoDate(t))
+        : undefined;
+
+      orders.push({
+        id: docSnap.id,
+        ...(raw as any),
+        deliveryDate: toIsoDate(raw.deliveryDate),
+        createdAt: toIsoDate(raw.createdAt),
+        updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+        deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
+        reminderTimings,
+        customReminderDates,
+        notificationTimestamps,
+        reminders: {
+          reminderTimings,
+          customReminderDates,
+          notificationTimestamps,
+        },
+        expenses: Array.isArray(raw.expenses)
+          ? raw.expenses.map((e: any) => ({
+              ...e,
+              date: toIsoDate(e.date),
+            }))
+          : undefined,
+      });
         });
         AsyncStorage.setItem(ORDERS_CACHE_KEY, JSON.stringify(orders)).catch(() => {});
         onSuccess(orders);
@@ -122,6 +140,19 @@ export const FirestoreService = {
       const orders: CakeOrder[] = [];
       snapshot.forEach((docSnap) => {
         const raw = docSnap.data();
+        // Map raw reminders if stored in map format
+        const rawReminders = raw.reminders;
+        const reminderTimings = Array.isArray(rawReminders?.reminderTimings)
+          ? rawReminders.reminderTimings
+          : (Array.isArray(raw.reminderTimings) ? raw.reminderTimings : []);
+        const customReminderDates = Array.isArray(rawReminders?.customReminderDates)
+          ? rawReminders.customReminderDates
+          : (Array.isArray(raw.customReminderDates) ? raw.customReminderDates : []);
+        const rawTimestamps = rawReminders?.notificationTimestamps || raw.notificationTimestamps;
+        const notificationTimestamps = Array.isArray(rawTimestamps)
+          ? rawTimestamps.map((t: any) => toIsoDate(t))
+          : undefined;
+
         orders.push({
           id: docSnap.id,
           ...(raw as any),
@@ -129,9 +160,14 @@ export const FirestoreService = {
           createdAt: toIsoDate(raw.createdAt),
           updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
           deliveryHandoverTime: raw.deliveryHandoverTime ? toIsoDate(raw.deliveryHandoverTime) : undefined,
-          notificationTimestamps: Array.isArray(raw.notificationTimestamps)
-            ? raw.notificationTimestamps.map((t: any) => toIsoDate(t))
-            : undefined,
+          reminderTimings,
+          customReminderDates,
+          notificationTimestamps,
+          reminders: {
+            reminderTimings,
+            customReminderDates,
+            notificationTimestamps,
+          },
           expenses: Array.isArray(raw.expenses)
             ? raw.expenses.map((e: any) => ({
                 ...e,
@@ -162,7 +198,7 @@ export const FirestoreService = {
     const deliveryMs = new Date(order.deliveryDate).getTime();
     const timings: ReminderTiming[] = Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0
       ? order.reminderTimings
-      : (order.reminderTiming ? [order.reminderTiming] : []);
+      : (order.reminders?.reminderTimings || []);
 
     const offsetMap: Record<ReminderTiming, number> = {
       '15_min': 15 * 60 * 1000,
@@ -178,9 +214,11 @@ export const FirestoreService = {
       return Timestamp.fromMillis(triggerMs);
     });
 
+    const customReminderDates = order.customReminderDates || order.reminders?.customReminderDates || [];
+
     // Also include custom specified date & times as native Timestamps
-    const customTimestamps = Array.isArray(order.customReminderDates)
-      ? order.customReminderDates
+    const customTimestamps = Array.isArray(customReminderDates)
+      ? customReminderDates
           .map((iso) => {
             const d = new Date(iso);
             return !isNaN(d.getTime()) ? Timestamp.fromDate(d) : null;
@@ -190,9 +228,8 @@ export const FirestoreService = {
 
     const notificationTimestamps = [...computedTimestamps, ...customTimestamps];
 
-    // Omit expenses from the order document to prevent duplicate storage;
-    // all expenses are exclusively stored and queried in the dedicated /expenses collection.
-    const { expenses: _expenses, ...orderWithoutExpenses } = order;
+    // Omit expenses and legacy reminderTiming from the order document
+    const { expenses: _expenses, reminderTiming: _timing, ...orderWithoutExpenses } = order as any;
 
     // Clean all undefined values to prevent Firestore 'Unsupported field value: undefined' errors
     const cleanedOrder: Record<string, any> = {};
@@ -207,8 +244,15 @@ export const FirestoreService = {
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
+      // Single Map to store all reminder configuration
+      reminders: {
+        reminderTimings: timings,
+        customReminderDates: customReminderDates,
+        notificationTimestamps,
+      },
+      // Flat properties kept for query/view consistency
       reminderTimings: timings,
-      customReminderDates: order.customReminderDates || [],
+      customReminderDates: customReminderDates,
       notificationTimestamps,
     };
 

@@ -35,10 +35,15 @@ export interface CakeOrder {
   deliveryPhone?: string; // Contact phone number for delivery driver/company
   deliveryHandoverTime?: string; // When to hand the cake over to driver (ISO string or time note)
   reminderEnabled?: boolean; // In-app reminder active
-  reminderTiming?: ReminderTiming; // Legacy single reminder timing
-  reminderTimings?: ReminderTiming[]; // Multiple reminder notifications (e.g., ['15_min', '1_hour', '1_day'])
-  customReminderDates?: string[]; // Specific custom reminder date & times chosen by user (ISO strings)
-  notificationTimestamps?: string[]; // Calculated trigger timestamps (ISO strings) based on deliveryDate - offset or custom alerts
+  reminders?: {
+    reminderTimings: ReminderTiming[]; // Multiple reminder notifications (e.g., ['15_min', '1_hour', '1_day'])
+    customReminderDates: string[]; // Specific custom reminder date & times chosen by user (ISO strings)
+    notificationTimestamps?: string[]; // Calculated trigger timestamps (ISO strings)
+  };
+  // Flat properties maintained for backward-compatibility & direct access:
+  reminderTimings?: ReminderTiming[];
+  customReminderDates?: string[];
+  notificationTimestamps?: string[];
   referenceImages: string[]; // Base64 or local file URIs
   createdAt: string;
 }

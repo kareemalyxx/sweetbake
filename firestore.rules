@@ -32,7 +32,10 @@ service cloud.firestore {
     //   - fulfillmentType: string (optional, enum: 'Pickup'|'Delivery')
     //   - location: string (optional, 0..300 chars)
     //   - reminderEnabled: bool (optional)
-    //   - reminderTiming: string (optional, enum: 'on_time'|'15_min'|'1_hour'|'2_hours'|'1_day')
+    //   - reminders: map containing reminderTimings, customReminderDates, notificationTimestamps (optional)
+    //   - reminderTimings: list of strings (optional, max 10 items)
+    //   - customReminderDates: list of strings (optional, max 10 items)
+    //   - notificationTimestamps: list of strings (optional, max 10 items)
     //   - addons: map of addon name to boolean status (optional, max 30 entries) or legacy list of strings
     //   - referenceImages: list of strings (optional, max 10 URLs/URIs, each <= 2000 chars)
     //   - createdAt: timestamp or string (required on create, immutable)
@@ -132,12 +135,11 @@ service cloud.firestore {
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location',
         'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
-        'reminderEnabled', 'reminderTiming', 'reminderTimings', 'customReminderDates',
+        'reminderEnabled', 'reminders', 'reminderTimings', 'customReminderDates',
         'notificationTimestamps', 'addons', 'referenceImages', 'createdAt', 'updatedAt', 'userId'
       ];
       let validStatuses = ['Pending', 'Baking', 'Decorating', 'Delivered'];
       let validFulfillment = ['Pickup', 'Delivery'];
-      let validReminderTimings = ['on_time', '15_min', '1_hour', '2_hours', '1_day'];
 
       return hasOnlyAllowedFields(allowed) &&
         hasRequiredFields(['customerName', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'status', 'quotedPrice', 'createdAt']) &&
@@ -164,7 +166,12 @@ service cloud.firestore {
         (!('deliveryHandoverTime' in data) || isValidTimestampOrIsoDate(data.deliveryHandoverTime)) &&
         (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 40)) &&
         (!('reminderEnabled' in data) || data.reminderEnabled is bool) &&
-        (!('reminderTiming' in data) || data.reminderTiming in validReminderTimings) &&
+        (!('reminders' in data) || (
+          data.reminders is map &&
+          (!('reminderTimings' in data.reminders) || (data.reminders.reminderTimings is list && data.reminders.reminderTimings.size() <= 10)) &&
+          (!('customReminderDates' in data.reminders) || (data.reminders.customReminderDates is list && data.reminders.customReminderDates.size() <= 10)) &&
+          (!('notificationTimestamps' in data.reminders) || (data.reminders.notificationTimestamps is list && data.reminders.notificationTimestamps.size() <= 10))
+        )) &&
         (!('reminderTimings' in data) || (data.reminderTimings is list && data.reminderTimings.size() <= 10)) &&
         (!('customReminderDates' in data) || (data.customReminderDates is list && data.customReminderDates.size() <= 10)) &&
         (!('notificationTimestamps' in data) || (data.notificationTimestamps is list && data.notificationTimestamps.size() <= 10)) &&

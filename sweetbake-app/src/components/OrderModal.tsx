@@ -172,15 +172,15 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setDeliveryPhone(orderToEdit.deliveryPhone || '');
       setDeliveryHandoverDate(orderToEdit.deliveryHandoverTime ? new Date(orderToEdit.deliveryHandoverTime) : null);
       setReminderEnabled(Boolean(orderToEdit.reminderEnabled));
-      if (Array.isArray(orderToEdit.reminderTimings) && orderToEdit.reminderTimings.length > 0) {
-        setReminderTimings(orderToEdit.reminderTimings);
-      } else if (orderToEdit.reminderTiming) {
-        setReminderTimings([orderToEdit.reminderTiming]);
+      const editTimings = orderToEdit.reminders?.reminderTimings || orderToEdit.reminderTimings;
+      if (Array.isArray(editTimings) && editTimings.length > 0) {
+        setReminderTimings(editTimings);
       } else {
         setReminderTimings(['1_hour']);
       }
+      const editCustomDates = orderToEdit.reminders?.customReminderDates || orderToEdit.customReminderDates;
       setCustomReminderDates(
-        Array.isArray(orderToEdit.customReminderDates) ? orderToEdit.customReminderDates : []
+        Array.isArray(editCustomDates) ? editCustomDates : []
       );
       setCustomRequirements(orderToEdit.customRequirements || '');
       setReferenceImages(orderToEdit.referenceImages || []);
@@ -545,7 +545,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       deliveryPhone: fulfillmentType === 'Delivery' ? deliveryPhone.trim() || undefined : undefined,
       deliveryHandoverTime: fulfillmentType === 'Delivery' && deliveryHandoverDate ? deliveryHandoverDate.toISOString() : undefined,
       reminderEnabled,
-      reminderTiming: reminderEnabled ? reminderTimings[0] : undefined,
+      reminders: {
+        reminderTimings: reminderEnabled ? reminderTimings : [],
+        customReminderDates: reminderEnabled ? customReminderDates : [],
+      },
       reminderTimings: reminderEnabled ? reminderTimings : [],
       customReminderDates: reminderEnabled ? customReminderDates : [],
       customRequirements: customRequirements.trim(),

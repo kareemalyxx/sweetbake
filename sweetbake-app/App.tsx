@@ -170,8 +170,11 @@ export default function App() {
         deliveryPhone: orderData.deliveryPhone,
         deliveryHandoverTime: orderData.deliveryHandoverTime,
         reminderEnabled: Boolean(orderData.reminderEnabled),
-        reminderTiming: orderData.reminderTiming || '1_hour',
-        reminderTimings: orderData.reminderTimings || (orderData.reminderTiming ? [orderData.reminderTiming] : ['1_hour']),
+        reminders: orderData.reminders || {
+          reminderTimings: orderData.reminderTimings || ['1_hour'],
+          customReminderDates: orderData.customReminderDates || [],
+        },
+        reminderTimings: orderData.reminderTimings || ['1_hour'],
         customReminderDates: orderData.customReminderDates || [],
         referenceImages: orderData.referenceImages || [],
         createdAt: new Date().toISOString(),

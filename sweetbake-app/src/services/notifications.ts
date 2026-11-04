@@ -234,10 +234,9 @@ export const NotificationService = {
 
     // Determine the list of timings chosen (supports multiple)
     let timingsToSchedule: ReminderTiming[] = [];
-    if (Array.isArray(order.reminderTimings) && order.reminderTimings.length > 0) {
-      timingsToSchedule = order.reminderTimings;
-    } else if (order.reminderTiming) {
-      timingsToSchedule = [order.reminderTiming];
+    const sourceTimings = order.reminders?.reminderTimings || order.reminderTimings;
+    if (Array.isArray(sourceTimings) && sourceTimings.length > 0) {
+      timingsToSchedule = sourceTimings;
     } else {
       timingsToSchedule = ['1_hour'];
     }
