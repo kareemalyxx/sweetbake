@@ -1,6 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Linking, Alert } from 'react-native';
+import { Linking, Alert, Platform } from 'react-native';
+import * as Notifications from 'expo-notifications';
 import { CakeOrder, ReminderTiming } from '../types';
+
+// Configure system notification handler for phone alerts
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+} catch (e) {
+  // Handled safely in web/unsupported environments
+}
 
 export interface InAppNotification {
   id: string;
@@ -16,6 +32,7 @@ export interface InAppNotification {
   timingLabel: string;
   isRead: boolean;
   createdAt: string;
+  systemNotificationId?: string; // Expo system notification identifier
 }
 
 const NOTIFICATIONS_STORAGE_KEY = '@sweetbake_reminders_v1';
@@ -124,6 +141,78 @@ export const NotificationService = {
   },
 
   /**
+   * Request device notification permissions for native phone alerts
+   */
+  async requestDeviceNotificationPermission(): Promise<boolean> {
+    try {
+      if (Platform.OS === 'web') return false;
+      const { status: existingStatus } = await Notifications.getPermissionsAsync();
+      let finalStatus = existingStatus;
+      if (existingStatus !== 'granted') {
+        const { status } = await Notifications.requestPermissionsAsync();
+        finalStatus = status;
+      }
+      return finalStatus === 'granted';
+    } catch (e) {
+      console.warn('Notification permission error:', e);
+      return false;
+    }
+  },
+
+  /**
+   * Trigger an immediate test notification alert directly on the phone
+   */
+  async sendImmediatePhoneAlert(title: string, body: string): Promise<string | null> {
+    try {
+      await this.requestDeviceNotificationPermission();
+      const notifId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+        },
+        trigger: null, // immediate
+      });
+      return notifId;
+    } catch (e) {
+      console.warn('Failed to send immediate phone notification:', e);
+      return null;
+    }
+  },
+
+  /**
+   * Schedule a native phone alert at a future trigger time
+   */
+  async schedulePhoneAlert(triggerDate: Date, title: string, body: string, data?: any): Promise<string | null> {
+    try {
+      const now = Date.now();
+      const triggerMs = triggerDate.getTime();
+      const secondsUntil = Math.floor((triggerMs - now) / 1000);
+      if (secondsUntil <= 0) return null;
+
+      await this.requestDeviceNotificationPermission();
+      const notifId = await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: true,
+          data,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
+        },
+        trigger: {
+          type: Notifications.SchedulableTriggerInputTypes.DATE,
+          date: triggerDate,
+        },
+      });
+      return notifId;
+    } catch (e) {
+      console.warn('Failed to schedule native phone alert:', e);
+      return null;
+    }
+  },
+
+  /**
    * Schedule one or more order reminders based on order pickup/delivery time.
    * Calculates the exact trigger timestamp by subtracting the offset:
    * (e.g. delivery at 2:00 PM with '15_min' -> trigger at 1:45 PM).
@@ -133,6 +222,9 @@ export const NotificationService = {
       await this.cancelOrderReminder(order.id);
       return;
     }
+
+    // Cancel existing native phone alerts for this order to avoid duplicates
+    await this.cancelOrderReminder(order.id);
 
     // Determine the list of timings chosen (supports multiple)
     let timingsToSchedule: ReminderTiming[] = [];
@@ -147,32 +239,47 @@ export const NotificationService = {
     const orderTime = new Date(order.deliveryDate).getTime();
     const newNotifications: InAppNotification[] = [];
 
-    timingsToSchedule.forEach((timing) => {
+    for (const timing of timingsToSchedule) {
       const offsetMs = this.getTimingOffsetMs(timing);
       // Precise timestamp calculation: e.g. 2:00 PM (14:00) - 15 min = 1:45 PM (13:45)
       const triggerTimestamp = orderTime - offsetMs;
+      const triggerDate = new Date(triggerTimestamp);
       const timingLabel = this.getTimingDisplay(timing);
+      const title = `🎂 SweetBake Alert: ${order.customerName}`;
+      const message = `${order.fulfillmentType || 'Pickup'} due for ${order.customerName} (${timingLabel})`;
+
+      // Schedule native OS phone banner & ringtone
+      let systemNotificationId: string | undefined;
+      if (triggerTimestamp > Date.now()) {
+        const sysId = await this.schedulePhoneAlert(triggerDate, title, message, {
+          orderId: order.id,
+          timing,
+        });
+        if (sysId) systemNotificationId = sysId;
+      }
 
       newNotifications.push({
         id: `remind-${order.id}-${timing}`,
         orderId: order.id,
         customerName: order.customerName,
         customerPhone: order.customerPhone,
-        triggerTime: new Date(triggerTimestamp).toISOString(),
+        triggerTime: triggerDate.toISOString(),
         deliveryDate: order.deliveryDate,
         fulfillmentType: order.fulfillmentType || 'Pickup',
         location: order.location,
-        message: `${order.fulfillmentType || 'Pickup'} due for ${order.customerName} (${timingLabel})`,
+        message,
         timing,
         timingLabel,
         isRead: false,
         createdAt: new Date().toISOString(),
+        systemNotificationId,
       });
-    });
+    }
 
     // Also schedule any custom specific date & time reminders picked by user
     if (Array.isArray(order.customReminderDates) && order.customReminderDates.length > 0) {
-      order.customReminderDates.forEach((customIso, idx) => {
+      for (let idx = 0; idx < order.customReminderDates.length; idx++) {
+        const customIso = order.customReminderDates[idx];
         const customDate = new Date(customIso);
         if (!isNaN(customDate.getTime())) {
           const timingLabel = customDate.toLocaleString(undefined, {
@@ -183,6 +290,19 @@ export const NotificationService = {
             hour12: true,
           });
 
+          const title = `🎂 SweetBake Alert: ${order.customerName}`;
+          const message = `Order reminder for ${order.customerName} (${timingLabel})`;
+
+          // Schedule native phone alert
+          let systemNotificationId: string | undefined;
+          if (customDate.getTime() > Date.now()) {
+            const sysId = await this.schedulePhoneAlert(customDate, title, message, {
+              orderId: order.id,
+              customIso,
+            });
+            if (sysId) systemNotificationId = sysId;
+          }
+
           newNotifications.push({
             id: `remind-${order.id}-custom-${idx}`,
             orderId: order.id,
@@ -192,14 +312,15 @@ export const NotificationService = {
             deliveryDate: order.deliveryDate,
             fulfillmentType: order.fulfillmentType || 'Pickup',
             location: order.location,
-            message: `Custom alert for ${order.customerName} (${timingLabel})`,
+            message,
             timing: 'custom',
             timingLabel: `At ${timingLabel}`,
             isRead: false,
             createdAt: new Date().toISOString(),
+            systemNotificationId,
           });
         }
-      });
+      }
     }
 
     const current = await this.getAllReminders();
@@ -210,6 +331,16 @@ export const NotificationService = {
 
   async cancelOrderReminder(orderId: string): Promise<void> {
     const current = await this.getAllReminders();
+    // Cancel scheduled native OS phone notifications
+    for (const notif of current) {
+      if (notif.orderId === orderId && notif.systemNotificationId) {
+        try {
+          await Notifications.cancelScheduledNotificationAsync(notif.systemNotificationId);
+        } catch {
+          // Ignore cancellation errors
+        }
+      }
+    }
     const updated = current.filter((n) => n.orderId !== orderId);
     await AsyncStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(updated));
   },
