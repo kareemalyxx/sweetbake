@@ -49,7 +49,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [cakeType, setCakeType] = useState(CAKE_TYPES[0]);
   const [shape, setShape] = useState(CAKE_SHAPES[0]);
   const [flavor, setFlavor] = useState(CAKE_FLAVORS[0]);
-  const [selectedAddons, setSelectedAddons] = useState<Record<string, boolean>>({});
+  const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [status, setStatus] = useState<OrderStatus>('Pending');
 
   // Fulfillment & Location
@@ -129,15 +129,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(orderToEdit.shape);
       setFlavor(orderToEdit.flavor);
       setStatus(orderToEdit.status);
-      // Convert list to map if legacy array format, otherwise use map
+      // Convert addons to string[] array format
       if (Array.isArray(orderToEdit.addons)) {
-        const addonMap: Record<string, boolean> = {};
-        orderToEdit.addons.forEach((item: string) => {
-          addonMap[item] = false;
-        });
-        setSelectedAddons(addonMap);
+        setSelectedAddons(orderToEdit.addons);
+      } else if (orderToEdit.addons && typeof orderToEdit.addons === 'object') {
+        setSelectedAddons(Object.keys(orderToEdit.addons));
       } else {
-        setSelectedAddons(orderToEdit.addons || {});
+        setSelectedAddons([]);
       }
       setTotalPaymentStr(String(orderToEdit.quotedPrice ?? 85));
       setDownPaymentStr(String(orderToEdit.downPayment ?? 0));
@@ -155,7 +153,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
       setStatus('Pending');
-      setSelectedAddons({});
+      setSelectedAddons([]);
       setTotalPaymentStr('85');
       setDownPaymentStr('0');
       setExpenses([]);
@@ -271,8 +269,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     const trimmed = newAddonInput.trim();
     if (!trimmed) return;
     if (availableAddons.includes(trimmed)) {
-      if (selectedAddons[trimmed] === undefined) {
-        setSelectedAddons({ ...selectedAddons, [trimmed]: false });
+      if (!selectedAddons.includes(trimmed)) {
+        setSelectedAddons([...selectedAddons, trimmed]);
       }
       setNewAddonInput('');
       setShowAddAddon(false);
@@ -281,7 +279,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     triggerHaptic.success();
     const updated = [...availableAddons, trimmed];
     setAvailableAddons(updated);
-    setSelectedAddons({ ...selectedAddons, [trimmed]: false });
+    setSelectedAddons([...selectedAddons, trimmed]);
     setNewAddonInput('');
     setShowAddAddon(false);
     await StorageService.saveCakeAddons(updated);
@@ -289,12 +287,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
   const toggleAddon = (addon: string) => {
     triggerHaptic.selection();
-    if (selectedAddons[addon] !== undefined) {
-      const next = { ...selectedAddons };
-      delete next[addon];
-      setSelectedAddons(next);
+    if (selectedAddons.includes(addon)) {
+      setSelectedAddons(selectedAddons.filter((a) => a !== addon));
     } else {
-      setSelectedAddons({ ...selectedAddons, [addon]: false });
+      setSelectedAddons([...selectedAddons, addon]);
     }
   };
 
@@ -335,12 +331,8 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     } else if (category === 'Add-on') {
       const updated = availableAddons.map((a) => (a === oldValue ? newVal : a));
       setAvailableAddons(updated);
-      if (selectedAddons[oldValue] !== undefined) {
-        const next = { ...selectedAddons };
-        const isDone = next[oldValue];
-        delete next[oldValue];
-        next[newVal] = isDone;
-        setSelectedAddons(next);
+      if (selectedAddons.includes(oldValue)) {
+        setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? newVal : a)));
       }
       await StorageService.saveCakeAddons(updated);
     }
@@ -899,8 +891,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
                 {availableAddons.map((addon) => {
-                  const isSelected = selectedAddons[addon] !== undefined;
-                  const isDone = Boolean(selectedAddons[addon]);
+                  const isSelected = selectedAddons.includes(addon);
                   return (
                     <TouchableOpacity
                       key={addon}
@@ -916,7 +907,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                         style={{ marginRight: 5 }}
                       />
                       <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
-                        {addon} {isSelected && (isDone ? '✓' : '')}
+                        {addon}
                       </Text>
                     </TouchableOpacity>
                   );

@@ -133,12 +133,15 @@ export const FirestoreService = {
   },
 
   /**
-   * Save a requirement item
+   * Save a requirement item (ensures reqId is stored in the document)
    */
   async saveRequirement(req: GeneralRequirement): Promise<void> {
-    const reqRef = doc(db, 'requirements', req.id);
+    const reqId = req.reqId || req.id;
+    const reqRef = doc(db, 'requirements', reqId);
     const dataToSave = {
       ...req,
+      id: reqId,
+      reqId: reqId,
       updatedAt: new Date().toISOString(),
     };
     await setDoc(reqRef, dataToSave, { merge: true });

@@ -125,7 +125,7 @@ export default function App() {
         cakeType: orderData.cakeType || 'Celebration Cake',
         shape: orderData.shape || 'Round',
         flavor: orderData.flavor || 'Vanilla Bean & Berry',
-        addons: orderData.addons || {},
+        addons: orderData.addons || [],
         customRequirements: orderData.customRequirements || '',
         status: orderData.status || 'Pending',
         quotedPrice: totalVal,
@@ -161,56 +161,49 @@ export default function App() {
     }
 
     // Synchronize Add-ons with Checklist (Business Needs)
-    // Supports Map (Record<string, boolean>) and legacy array with deterministic unique IDs
-    if (orderData.addons) {
+    // Addons are stored in order as a clean string[] list; boolean status is stored in requirements
+    if (orderData.addons && orderData.addons.length > 0) {
       const clientName = orderData.customerName || 'Cake Order';
       let currentReqs = [...requirements];
 
-      const addonEntries: [string, boolean][] = Array.isArray(orderData.addons)
-        ? orderData.addons.map((a: string) => [a, false])
-        : Object.entries(orderData.addons);
+      const addonList: string[] = Array.isArray(orderData.addons)
+        ? orderData.addons
+        : Object.keys(orderData.addons);
 
-      if (addonEntries.length > 0) {
-        addonEntries.forEach(([addon, isDone], idx) => {
-          const cleanName = addon.trim();
-          const safeSlug = cleanName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
-          const deterministicId = `addon-${targetOrderId}-${safeSlug}-${idx}`;
+      addonList.forEach((addon, idx) => {
+        const cleanName = addon.trim();
+        const safeSlug = cleanName.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
+        const deterministicId = `addon-${targetOrderId}-${safeSlug}-${idx}`;
 
-          const existingIndex = currentReqs.findIndex(
-            (r) =>
-              r.id === deterministicId ||
-              (r.orderId === targetOrderId && r.title.startsWith(cleanName))
-          );
+        const existingIndex = currentReqs.findIndex(
+          (r) =>
+            r.id === deterministicId ||
+            r.reqId === deterministicId ||
+            (r.orderId === targetOrderId && r.title.startsWith(cleanName))
+        );
 
-          if (existingIndex >= 0) {
-            if (currentReqs[existingIndex].isCompleted !== isDone) {
-              currentReqs[existingIndex] = {
-                ...currentReqs[existingIndex],
-                isCompleted: isDone,
-              };
-            }
-          } else {
-            const newReq: GeneralRequirement = {
-              id: deterministicId,
-              title: `${cleanName} (${clientName})`,
-              category: 'Add-ons',
-              isCompleted: isDone,
-              orderId: targetOrderId,
-              createdAt: new Date().toISOString(),
-            };
-            currentReqs = [newReq, ...currentReqs];
-          }
+        if (existingIndex === -1) {
+          const newReq: GeneralRequirement = {
+            id: deterministicId,
+            reqId: deterministicId,
+            title: `${cleanName} (${clientName})`,
+            category: 'Add-ons',
+            isCompleted: false,
+            orderId: targetOrderId,
+            createdAt: new Date().toISOString(),
+          };
+          currentReqs = [newReq, ...currentReqs];
+        }
+      });
+
+      setRequirements(currentReqs);
+      await StorageService.saveRequirements(currentReqs);
+
+      currentReqs
+        .filter((r) => r.orderId === targetOrderId)
+        .forEach((req) => {
+          FirestoreService.saveRequirement(req).catch(() => {});
         });
-
-        setRequirements(currentReqs);
-        await StorageService.saveRequirements(currentReqs);
-
-        currentReqs
-          .filter((r) => r.orderId === targetOrderId)
-          .forEach((req) => {
-            FirestoreService.saveRequirement(req).catch(() => {});
-          });
-      }
     }
   };
 
@@ -276,47 +269,13 @@ export default function App() {
 
   // Requirements State Handlers - strictly targets ONLY the exact item matching id
   const handleToggleRequirement = async (id: string) => {
-    const targetReq = requirements.find((r) => r.id === id);
     const updated = requirements.map((r) =>
-      r.id === id ? { ...r, isCompleted: !r.isCompleted } : r
+      (r.id === id || r.reqId === id) ? { ...r, isCompleted: !r.isCompleted } : r
     );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-    // If this requirement is linked to an order's addon, sync the boolean to the order
-    if (targetReq && targetReq.orderId && targetReq.category === 'Add-ons') {
-      const newStatus = !targetReq.isCompleted;
-      const linkedOrder = orders.find((o) => o.id === targetReq.orderId);
-      if (linkedOrder && linkedOrder.addons) {
-        let updatedOrderAddons: Record<string, boolean>;
-        if (Array.isArray(linkedOrder.addons)) {
-          updatedOrderAddons = {};
-          linkedOrder.addons.forEach((a: string) => {
-            updatedOrderAddons[a] = targetReq.title.startsWith(a) ? newStatus : false;
-          });
-        } else {
-          updatedOrderAddons = { ...linkedOrder.addons };
-          for (const key of Object.keys(updatedOrderAddons)) {
-            if (targetReq.title.startsWith(key)) {
-              updatedOrderAddons[key] = newStatus;
-            }
-          }
-        }
-        const updatedOrdersList = orders.map((o) =>
-          o.id === linkedOrder.id ? { ...o, addons: updatedOrderAddons } : o
-        );
-        setOrders(updatedOrdersList);
-        await StorageService.saveOrders(updatedOrdersList);
 
-        const syncedOrder = updatedOrdersList.find((o) => o.id === linkedOrder.id);
-        if (syncedOrder) {
-          FirestoreService.saveOrder(syncedOrder).catch((e) =>
-            console.warn('Failed to sync updated order addons to Firestore:', e)
-          );
-        }
-      }
-    }
-
-    const toggled = updated.find((r) => r.id === id);
+    const toggled = updated.find((r) => r.id === id || r.reqId === id);
     if (toggled) {
       FirestoreService.saveRequirement(toggled).catch((e) =>
         console.warn('Failed to sync requirement to Firestore:', e)
@@ -325,8 +284,10 @@ export default function App() {
   };
 
   const handleAddRequirement = async (title: string, category: RequirementCategory) => {
+    const genId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     const newReq: GeneralRequirement = {
-      id: `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      id: genId,
+      reqId: genId,
       title,
       category,
       isCompleted: false,

@@ -155,7 +155,7 @@ service cloud.firestore {
     // ===============================================================
 
     function isValidRequirement(data) {
-      let allowed = ['id', 'title', 'category', 'isCompleted', 'orderId', 'createdAt', 'updatedAt', 'userId'];
+      let allowed = ['id', 'reqId', 'title', 'category', 'isCompleted', 'orderId', 'createdAt', 'updatedAt', 'userId'];
       let validCategories = ['Ingredients', 'Packaging', 'Tools', 'Add-ons'];
 
       return hasOnlyAllowedFields(allowed) &&
@@ -165,6 +165,7 @@ service cloud.firestore {
         data.isCompleted is bool &&
         isValidTimestampOrIsoDate(data.createdAt) &&
         (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('reqId' in data) || (data.reqId is string && data.reqId.size() <= 100)) &&
         (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 100)) &&
         (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt)) &&
         (!('userId' in data) || (data.userId is string && data.userId == request.auth.uid));

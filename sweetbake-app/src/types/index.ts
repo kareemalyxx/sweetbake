@@ -18,7 +18,7 @@ export interface CakeOrder {
   cakeType: string;
   shape: string;
   flavor: string;
-  addons?: Record<string, boolean>; // Map of custom addons to completed status (e.g. { "Topper": false, "Flowers": true })
+  addons?: string[]; // Multiselection for custom addons (completion tracked in requirements)
   customRequirements: string;
   status: OrderStatus;
   quotedPrice: number;
@@ -37,6 +37,7 @@ export type RequirementCategory = 'Ingredients' | 'Packaging' | 'Tools' | 'Add-o
 
 export interface GeneralRequirement {
   id: string;
+  reqId?: string; // Explicit reqId property stored in document
   title: string;
   category: RequirementCategory;
   isCompleted: boolean;

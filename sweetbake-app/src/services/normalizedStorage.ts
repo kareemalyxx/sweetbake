@@ -147,10 +147,7 @@ export const NormalizedStorage = {
       cakeType: norm.specifications.cakeTypeName,
       shape: norm.specifications.shapeName,
       flavor: norm.specifications.flavorName,
-      addons: norm.addons.reduce<Record<string, boolean>>((acc, a) => {
-        acc[a.name] = false;
-        return acc;
-      }, {}),
+      addons: norm.addons.map((a) => a.name),
       customRequirements: norm.specifications.customRequirements,
       status: norm.status,
       quotedPrice: norm.financials.quotedTotal,
