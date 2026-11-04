@@ -1208,26 +1208,6 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       )}
                     </View>
 
-                    {/* Test Phone Alert Banner */}
-                    <TouchableOpacity
-                      style={styles.testPhoneAlertBtn}
-                      onPress={async () => {
-                        triggerHaptic.medium();
-                        const id = await NotificationService.sendImmediatePhoneAlert(
-                          `🎂 SweetBake Alert: ${customerName.trim() || 'Cake Order'}`,
-                          `Scheduled for ${formattedDateStr} at ${formattedTimeStr} (${fulfillmentType})`
-                        );
-                        if (id) {
-                          Alert.alert('Notification Sent', 'A test alert banner has been sent to your phone notification bar.');
-                        } else {
-                          Alert.alert('Notice', 'Please allow notifications for SweetBake Studio in your phone settings.');
-                        }
-                      }}
-                    >
-                      <Ionicons name="phone-portrait-outline" size={16} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
-                      <Text style={styles.testPhoneAlertText}>Send Test Alert to Phone Now</Text>
-                    </TouchableOpacity>
-
                     {/* Direct WhatsApp Test / Send Option */}
                     <TouchableOpacity
                       style={styles.directWhatsAppBtn}
@@ -2165,23 +2145,6 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     color: Theme.colors.textSecondary,
     marginTop: 4,
-  },
-  testPhoneAlertBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFF0F3',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Theme.colors.roseGold,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginTop: 12,
-  },
-  testPhoneAlertText: {
-    color: Theme.colors.deepRose,
-    fontSize: 13,
-    fontWeight: '800',
   },
   directWhatsAppBtn: {
     flexDirection: 'row',
