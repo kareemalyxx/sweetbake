@@ -517,43 +517,36 @@ export default function App() {
     );
 
     // 2. Also remove from order.expenses if it originated from an order
-    const hasOrderExpense = orders.some(
-      (o) => Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId)
-    );
-    if (hasOrderExpense) {
-      const updatedOrders = orders.map((o) => {
-        if (Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId)) {
-          const filtered = o.expenses.filter((e) => e.id !== cleanId && e.id !== targetExpId);
-          const newOrder = { ...o, expenses: filtered };
-          FirestoreService.saveOrder(newOrder).catch(() => {});
-          return newOrder;
-        }
-        return o;
-      });
-      setOrders(updatedOrders);
-      await StorageService.saveOrders(updatedOrders);
-    }
+    const updatedOrders = orders.map((o) => {
+      if (Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId || e.id === transactionOrExpenseId || `exp-${e.id}` === transactionOrExpenseId)) {
+        const filtered = o.expenses.filter((e) => e.id !== cleanId && e.id !== targetExpId && e.id !== transactionOrExpenseId && `exp-${e.id}` !== transactionOrExpenseId);
+        const newOrder = { ...o, expenses: filtered };
+        FirestoreService.saveOrder(newOrder).catch(() => {});
+        return newOrder;
+      }
+      return o;
+    });
+    setOrders(updatedOrders);
+    await StorageService.saveOrders(updatedOrders);
 
     // 3. If it originated from a requirement/checklist expense (req-exp-...), reset requirement expense fields
-    if (transactionOrExpenseId.startsWith('req-exp-') || cleanId.startsWith('req-') || cleanId.startsWith('addon-')) {
-      const targetReqId = transactionOrExpenseId.startsWith('req-exp-')
-        ? transactionOrExpenseId.replace(/^req-exp-/, '')
-        : cleanId;
-      const targetReq = requirements.find((r) => r.id === targetReqId || r.reqId === targetReqId);
-      if (targetReq && (targetReq.expenseAmount || targetReq.expenseDate)) {
-        const updatedReqs = requirements.map((r) => {
-          if (r.id === targetReqId || r.reqId === targetReqId) {
-            const { expenseAmount, expenseDate, ...rest } = r;
-            return rest;
-          }
-          return r;
-        });
-        setRequirements(updatedReqs);
-        await StorageService.saveRequirements(updatedReqs);
-        const cleaned = updatedReqs.find((r) => r.id === targetReqId || r.reqId === targetReqId);
-        if (cleaned) {
-          FirestoreService.saveRequirement(cleaned).catch(() => {});
+    const targetReqId = transactionOrExpenseId.startsWith('req-exp-')
+      ? transactionOrExpenseId.replace(/^req-exp-/, '')
+      : cleanId;
+    const targetReq = requirements.find((r) => r.id === targetReqId || r.reqId === targetReqId || r.id === cleanId || r.reqId === cleanId);
+    if (targetReq && (targetReq.expenseAmount || targetReq.expenseDate)) {
+      const updatedReqs = requirements.map((r) => {
+        if (r.id === targetReq.id || r.reqId === targetReq.id) {
+          const { expenseAmount, expenseDate, ...rest } = r;
+          return rest;
         }
+        return r;
+      });
+      setRequirements(updatedReqs);
+      await StorageService.saveRequirements(updatedReqs);
+      const cleaned = updatedReqs.find((r) => r.id === targetReq.id || r.reqId === targetReq.id);
+      if (cleaned) {
+        FirestoreService.saveRequirement(cleaned).catch(() => {});
       }
     }
   };

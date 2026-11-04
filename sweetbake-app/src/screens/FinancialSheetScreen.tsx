@@ -186,7 +186,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
 
     // Sort descending by transaction date
     return list.sort((a, b) => b.date.getTime() - a.date.getTime());
-  }, [orders, requirements, periodRange]);
+  }, [orders, requirements, expenses, periodRange]);
 
   // Aggregate Totals
   const totals = useMemo(() => {
