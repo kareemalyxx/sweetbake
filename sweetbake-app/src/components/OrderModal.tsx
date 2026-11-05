@@ -663,7 +663,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 <Ionicons name="logo-instagram" size={18} color="#E1306C" style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.socialInput}
-                  placeholder="Instagram handle (e.g. @username)"
+                  placeholder="Instagram URL or handle (e.g. https://instagram.com/user)"
                   placeholderTextColor={Theme.colors.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}

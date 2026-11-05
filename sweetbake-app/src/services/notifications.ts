@@ -160,6 +160,63 @@ export const NotificationService = {
   /**
    * Open Instagram DM / Profile with message copied to clipboard
    */
+  /**
+   * Helper to parse any Instagram input: whether full URL or plain handle/username
+   * Examples supported:
+   *  - https://www.instagram.com/johndoe/
+   *  - https://instagram.com/johndoe?igsh=xyz
+   *  - instagram.com/johndoe
+   *  - @johndoe
+   *  - johndoe
+   */
+  parseInstagramInput(input?: string): { username: string; directUrl: string } {
+    const raw = (input || '').trim();
+    if (!raw) {
+      return {
+        username: '',
+        directUrl: 'https://www.instagram.com/direct/inbox/',
+      };
+    }
+
+    let username = raw;
+
+    // Check if it's a URL
+    try {
+      const normalized = raw.startsWith('http://') || raw.startsWith('https://') ? raw : `https://${raw}`;
+      const urlObj = new URL(normalized);
+      if (urlObj.hostname.includes('instagram.com')) {
+        const segments = urlObj.pathname.split('/').filter(Boolean);
+        // Exclude system paths like direct, p, reel, stories, explore, etc.
+        if (segments.length > 0 && !['direct', 'p', 'reel', 'reels', 'stories', 'explore', 'accounts'].includes(segments[0].toLowerCase())) {
+          username = segments[0];
+        } else if (segments.length > 1 && segments[0].toLowerCase() === 'direct') {
+          return {
+            username: '',
+            directUrl: normalized,
+          };
+        }
+      }
+    } catch {
+      // Regex fallback if URL parser fails
+      const match = raw.match(/(?:instagram\.com\/)([\w._]+)/i);
+      if (match && match[1]) {
+        username = match[1];
+      }
+    }
+
+    // Clean @ or trailing slashes/queries
+    const cleanUsername = username.replace(/^@+/, '').split('?')[0].split('/')[0].trim();
+
+    return {
+      username: cleanUsername,
+      directUrl: cleanUsername ? `https://ig.me/m/${cleanUsername}` : 'https://www.instagram.com/direct/inbox/',
+    };
+  },
+
+  /**
+   * Send order notification directly via Instagram Direct
+   * Supports both profile URLs (e.g. https://instagram.com/username) and handles (@username)
+   */
   async sendInstagramNotification(order: {
     customerName: string;
     customerPhone?: string;
@@ -180,22 +237,20 @@ export const NotificationService = {
       console.warn('Could not copy to clipboard before opening Instagram:', e);
     }
 
-    const cleanUsername = (order.customerInstagram || '').trim().replace(/^@+/, '');
+    const { username: cleanUsername, directUrl: directChatWebUrl } = this.parseInstagramInput(order.customerInstagram);
     
     // Direct chat deep links:
-    // 1. App direct message thread / inbox: instagram://direct_v2, instagram://shares, or instagram://user?username=...
+    // 1. App direct message thread / inbox: instagram://shares, instagram://user?username=..., or instagram://direct_v2
     // 2. Web direct chat fallback: https://ig.me/m/{username} (officially opens direct chat on both mobile & desktop)
-    const directChatWebUrl = cleanUsername
-      ? `https://ig.me/m/${cleanUsername}`
-      : `https://www.instagram.com/direct/inbox/`;
-
     const appUrls = cleanUsername
       ? [
           `instagram://shares?recipient_users=${cleanUsername}`,
           `instagram://user?username=${cleanUsername}`,
           `instagram://direct_v2`,
         ]
-      : [`instagram://direct_v2`];
+      : (order.customerInstagram && order.customerInstagram.startsWith('http')
+          ? [order.customerInstagram, `instagram://direct_v2`]
+          : [`instagram://direct_v2`]);
 
     try {
       let opened = false;
