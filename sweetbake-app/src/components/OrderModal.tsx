@@ -229,7 +229,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   // Calculated remaining payment & profit after expenses
   const totalVal = Math.max(0, parseFloat(totalPaymentStr) || 0);
   const downVal = Math.max(0, parseFloat(downPaymentStr) || 0);
-  const remainingVal = Math.max(0, totalVal - downVal);
+  const deliveryFeeVal = fulfillmentType === 'Delivery' ? Math.max(0, parseFloat(deliveryCostStr) || 0) : 0;
+  // Total customer obligation is cake price + delivery fee; remaining balance due is total obligation minus down payment
+  const remainingVal = Math.max(0, totalVal + deliveryFeeVal - downVal);
   const totalExpensesVal = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
   const estimatedProfitVal = totalVal - totalExpensesVal;
 
@@ -663,7 +665,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 <Ionicons name="logo-instagram" size={18} color="#E1306C" style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.socialInput}
-                  placeholder="Instagram URL or handle (e.g. https://instagram.com/user)"
+                  placeholder="Instagram URL (e.g. https://instagram.com/username)"
                   placeholderTextColor={Theme.colors.textSecondary}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -1294,6 +1296,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
+                            deliveryCost: deliveryFeeVal > 0 ? deliveryFeeVal : undefined,
                             remainingPayment: remainingVal,
                           });
                         }}
@@ -1317,6 +1320,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
+                            deliveryCost: deliveryFeeVal > 0 ? deliveryFeeVal : undefined,
                             remainingPayment: remainingVal,
                           });
                         }}
@@ -1342,6 +1346,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
+                            deliveryCost: deliveryFeeVal > 0 ? deliveryFeeVal : undefined,
                             remainingPayment: remainingVal,
                           });
                         }}
@@ -1580,9 +1585,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               {/* Payments Split Box */}
               <View style={styles.paymentCard}>
                 <View style={styles.paymentInputGrid}>
-                  {/* Total Payment */}
+                  {/* Total Cake Payment */}
                   <View style={styles.paymentInputCol}>
-                    <Text style={styles.paymentFieldLabel}>Total Payment ($)</Text>
+                    <Text style={styles.paymentFieldLabel}>Cake Price ($)</Text>
                     <View style={styles.currencyInputRow}>
                       <Text style={styles.currencySymbol}>$</Text>
                       <TextInput
@@ -1613,13 +1618,32 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   </View>
                 </View>
 
+                {/* Delivery Fee Input in Payment Section if fulfillment is Delivery or if fee is entered */}
+                <View style={{ marginTop: 10 }}>
+                  <Text style={styles.paymentFieldLabel}>Delivery Fee / Cost ($)</Text>
+                  <View style={[styles.currencyInputRow, { backgroundColor: Theme.colors.warmIvory }]}>
+                    <Ionicons name="bicycle-outline" size={16} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
+                    <Text style={styles.currencySymbol}>$</Text>
+                    <TextInput
+                      style={styles.currencyInput}
+                      placeholder="0.00 (optional delivery fee)"
+                      placeholderTextColor={Theme.colors.textSecondary}
+                      keyboardType="decimal-pad"
+                      value={deliveryCostStr}
+                      onChangeText={setDeliveryCostStr}
+                    />
+                  </View>
+                </View>
+
                 {/* Auto Calculated Remaining Payment */}
                 <View style={styles.remainingCard}>
                   <View style={styles.remainingRow}>
                     <View style={styles.remainingInfo}>
                       <Text style={styles.remainingLabel}>Remaining Balance Due</Text>
                       <Text style={styles.remainingFormula}>
-                        Total (${totalVal.toFixed(2)}) - Down (${downVal.toFixed(2)})
+                        {deliveryFeeVal > 0
+                          ? `Cake ($${totalVal.toFixed(2)}) + Delivery ($${deliveryFeeVal.toFixed(2)}) - Down ($${downVal.toFixed(2)})`
+                          : `Total ($${totalVal.toFixed(2)}) - Down ($${downVal.toFixed(2)})`}
                       </Text>
                     </View>
                     <View style={[

@@ -55,6 +55,7 @@ export const NotificationService = {
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
+    deliveryCost?: number;
     remainingPayment?: number;
   }): string {
     const formattedDate = new Date(order.deliveryDate).toLocaleString(undefined, {
@@ -74,10 +75,17 @@ export const NotificationService = {
     ];
 
     if (typeof order.quotedPrice === 'number' && order.quotedPrice > 0) {
-      lines.push(`💰 *Total Quoted:* $${order.quotedPrice.toFixed(2)}`);
+      const deliveryFee = typeof order.deliveryCost === 'number' && order.deliveryCost > 0 ? order.deliveryCost : 0;
+      const totalOrderAmount = order.quotedPrice + deliveryFee;
+
+      lines.push(`💰 *Cake Price:* $${order.quotedPrice.toFixed(2)}`);
+      if (deliveryFee > 0) {
+        lines.push(`🚚 *Delivery Fee:* $${deliveryFee.toFixed(2)}`);
+        lines.push(`💵 *Total (Cake + Delivery):* $${totalOrderAmount.toFixed(2)}`);
+      }
       if (typeof order.remainingPayment === 'number') {
         if (order.remainingPayment > 0) {
-          lines.push(`💳 *Remaining Balance:* $${order.remainingPayment.toFixed(2)}`);
+          lines.push(`💳 *Remaining Balance Due:* $${order.remainingPayment.toFixed(2)}`);
         } else {
           lines.push(`✓ *Payment Status:* Paid in full`);
         }
@@ -105,6 +113,7 @@ export const NotificationService = {
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
+    deliveryCost?: number;
     remainingPayment?: number;
   }): Promise<void> {
     const message = this.buildOrderMessage(order);
@@ -130,6 +139,7 @@ export const NotificationService = {
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
+    deliveryCost?: number;
     remainingPayment?: number;
   }): Promise<void> {
     const message = this.buildOrderMessage(order);
@@ -228,6 +238,7 @@ export const NotificationService = {
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
+    deliveryCost?: number;
     remainingPayment?: number;
   }): Promise<void> {
     const message = this.buildOrderMessage(order);

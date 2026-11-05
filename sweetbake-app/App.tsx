@@ -96,6 +96,7 @@ export default function App() {
       (cloudExpenses) => {
         if (cloudExpenses) {
           setExpenses(cloudExpenses);
+          StorageService.saveExpenses(cloudExpenses).catch(() => { });
         }
       },
       (err) => console.warn('Firestore expenses sync notice:', err.message)
@@ -114,8 +115,12 @@ export default function App() {
   const loadData = async () => {
     const fetchedOrders = await StorageService.getOrders();
     const fetchedReqs = await StorageService.getRequirements();
+    const fetchedExpenses = await StorageService.getExpenses();
     setOrders(fetchedOrders);
     setRequirements(fetchedReqs);
+    if (fetchedExpenses && fetchedExpenses.length > 0) {
+      setExpenses(fetchedExpenses);
+    }
   };
 
   const checkReminders = async () => {
@@ -383,7 +388,7 @@ export default function App() {
     }
   };
 
-  // Requirements State Handlers - strictly targets ONLY the exact item matching id
+    // Requirements State Handlers - strictly targets ONLY the exact item matching id
   const handleToggleRequirement = async (id: string, expenseAmount?: number) => {
     const target = requirements.find((r) => r.id === id || r.reqId === id);
     if (!target) return;
@@ -396,13 +401,21 @@ export default function App() {
 
     const updated = requirements.map((r) => {
       if (r.id === id || r.reqId === id) {
+        if (!newCompletedStatus) {
+          // Reset expense attributes when marked as undone
+          const { expenseAmount: _amt, expenseDate: _d, ...rest } = r;
+          return {
+            ...rest,
+            isCompleted: false,
+          };
+        }
         return {
           ...r,
-          isCompleted: newCompletedStatus,
-          expenseAmount: newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0
+          isCompleted: true,
+          expenseAmount: typeof expenseAmount === 'number' && expenseAmount > 0
             ? expenseAmount
             : r.expenseAmount,
-          expenseDate: newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0
+          expenseDate: typeof expenseAmount === 'number' && expenseAmount > 0
             ? nowIso
             : r.expenseDate,
         };
@@ -420,8 +433,40 @@ export default function App() {
       );
     }
 
-    // If an expense amount was entered when completing, record it as an expense
-    if (newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0) {
+    if (!newCompletedStatus) {
+      // Marked as undone: remove associated expense from /expenses and order.expenses
+      const matchingExpenses = expenses.filter(
+        (e) => (e.notes === target.title || e.id.includes(target.id)) && (!target.orderId || e.orderId === target.orderId)
+      );
+
+      matchingExpenses.forEach((exp) => {
+        FirestoreService.deleteExpense(exp.id).catch((e) =>
+          console.warn('Failed to delete expense on checklist uncheck:', e)
+        );
+      });
+
+      const updatedExpenses = expenses.filter((e) => !matchingExpenses.some((m) => m.id === e.id));
+      setExpenses(updatedExpenses);
+      await StorageService.saveExpenses(updatedExpenses);
+
+      if (target.orderId) {
+        const targetOrderId = target.orderId;
+        const updatedOrders = orders.map((o) => {
+          if (o.id === targetOrderId && Array.isArray(o.expenses)) {
+            const filteredExpenses = o.expenses.filter(
+              (e) => !matchingExpenses.some((m) => m.id === e.id) && e.notes !== target.title
+            );
+            const newOrder = { ...o, expenses: filteredExpenses };
+            FirestoreService.saveOrder(newOrder).catch(() => {});
+            return newOrder;
+          }
+          return o;
+        });
+        setOrders(updatedOrders);
+        await StorageService.saveOrders(updatedOrders);
+      }
+    } else if (newCompletedStatus && typeof expenseAmount === 'number' && expenseAmount > 0) {
+      // If an expense amount was entered when completing, record it as an expense
       const expenseEntry: OrderExpense = {
         id: `exp-chk-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
         orderId: target.orderId || undefined,
@@ -436,7 +481,9 @@ export default function App() {
       );
 
       // Update in-memory and local state for instant real-time financial tracking
-      setExpenses((prev) => [expenseEntry, ...prev.filter((e) => e.id !== expenseEntry.id)]);
+      const newExpenses = [expenseEntry, ...expenses.filter((e) => e.id !== expenseEntry.id)];
+      setExpenses(newExpenses);
+      await StorageService.saveExpenses(newExpenses);
 
       if (target.orderId) {
         // Link directly into the corresponding cake commission order in memory/local storage
@@ -444,10 +491,12 @@ export default function App() {
         const updatedOrders = orders.map((o) => {
           if (o.id === targetOrderId) {
             const currentExpenses = Array.isArray(o.expenses) ? o.expenses : [];
-            return {
+            const newOrder = {
               ...o,
               expenses: [...currentExpenses, expenseEntry],
             };
+            FirestoreService.saveOrder(newOrder).catch(() => {});
+            return newOrder;
           }
           return o;
         });
@@ -456,7 +505,6 @@ export default function App() {
         await StorageService.saveOrders(updatedOrders);
       }
     }
-  };
 
   const handleAddRequirement = async (title: string, category: RequirementCategory) => {
     const genId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;

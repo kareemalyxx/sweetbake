@@ -236,6 +236,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
   // Filtered transactions for the list
   const filteredList = useMemo(() => {
     if (filterType === 'All') return transactions;
+    if (filterType === 'Expenses') return transactions.filter((t) => t.type === 'Expense');
     return transactions.filter((t) => t.type === filterType);
   }, [transactions, filterType]);
 

@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { CakeOrder, GeneralRequirement } from '../types';
+import { CakeOrder, GeneralRequirement, OrderExpense } from '../types';
 
 const ORDERS_KEY = '@sweetbake_orders_v1';
 const REQUIREMENTS_KEY = '@sweetbake_requirements_v1';
@@ -7,6 +7,7 @@ const FLAVORS_KEY = '@sweetbake_flavors_v1';
 const CAKE_TYPES_KEY = '@sweetbake_cake_types_v1';
 const CAKE_SHAPES_KEY = '@sweetbake_cake_shapes_v1';
 const CAKE_ADDONS_KEY = '@sweetbake_cake_addons_v1';
+const EXPENSES_KEY = '@sweetbake_expenses_v1';
 
 const defaultOrders: CakeOrder[] = [
   {
@@ -201,6 +202,24 @@ export const StorageService = {
       await AsyncStorage.setItem(CAKE_ADDONS_KEY, JSON.stringify(addons));
     } catch (e) {
       console.error('Failed to save cake addons', e);
+    }
+  },
+
+  getExpenses: async (): Promise<OrderExpense[]> => {
+    try {
+      const data = await AsyncStorage.getItem(EXPENSES_KEY);
+      return data ? JSON.parse(data) : [];
+    } catch (e) {
+      console.error('Failed to load expenses', e);
+      return [];
+    }
+  },
+
+  saveExpenses: async (expenses: OrderExpense[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(EXPENSES_KEY, JSON.stringify(expenses));
+    } catch (e) {
+      console.error('Failed to save expenses', e);
     }
   },
 };

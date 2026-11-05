@@ -40,7 +40,10 @@ export const OrderRow: React.FC<OrderRowProps> = ({
     Decorating: 'Deliver',
   };
 
-  const remaining = order.remainingPayment ?? Math.max(0, order.quotedPrice - (order.downPayment || 0));
+  const deliveryFee = order.fulfillmentType === 'Delivery' ? (order.deliveryCost || 0) : 0;
+  const remaining = order.remainingPayment !== undefined
+    ? order.remainingPayment
+    : Math.max(0, order.quotedPrice + deliveryFee - (order.downPayment || 0));
   const totalExpenses = (order.expenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
   const profit = order.quotedPrice - totalExpenses;
 
@@ -93,6 +96,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               fulfillmentType: order.fulfillmentType,
               location: order.location,
               quotedPrice: order.quotedPrice,
+              deliveryCost: deliveryFee > 0 ? deliveryFee : undefined,
               remainingPayment: remaining,
             });
           }}
@@ -117,6 +121,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               fulfillmentType: order.fulfillmentType,
               location: order.location,
               quotedPrice: order.quotedPrice,
+              deliveryCost: deliveryFee > 0 ? deliveryFee : undefined,
               remainingPayment: remaining,
             });
           }}
@@ -142,6 +147,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
               fulfillmentType: order.fulfillmentType,
               location: order.location,
               quotedPrice: order.quotedPrice,
+              deliveryCost: deliveryFee > 0 ? deliveryFee : undefined,
               remainingPayment: remaining,
             });
           }}
@@ -285,15 +291,21 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           {/* Financial Breakdown */}
           <View style={styles.financeSummaryRow}>
             <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>Quoted</Text>
+              <Text style={styles.financeLabel}>Cake</Text>
               <Text style={styles.financeValue}>${order.quotedPrice.toFixed(2)}</Text>
             </View>
+            {deliveryFee > 0 && (
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>Delivery</Text>
+                <Text style={styles.financeValue}>+${deliveryFee.toFixed(2)}</Text>
+              </View>
+            )}
             <View style={styles.financeItem}>
               <Text style={styles.financeLabel}>Down Payment</Text>
               <Text style={styles.financeValue}>${(order.downPayment || 0).toFixed(2)}</Text>
             </View>
             <View style={styles.financeItem}>
-              <Text style={styles.financeLabel}>Remaining</Text>
+              <Text style={styles.financeLabel}>Balance Due</Text>
               <Text style={[styles.financeValue, { color: remaining > 0 ? '#D81B60' : '#2E7D32' }]}>
                 {remaining > 0 ? `$${remaining.toFixed(2)}` : 'Paid'}
               </Text>
