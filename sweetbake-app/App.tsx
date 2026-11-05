@@ -505,6 +505,7 @@ export default function App() {
         await StorageService.saveOrders(updatedOrders);
       }
     }
+  };
 
   const handleAddRequirement = async (title: string, category: RequirementCategory) => {
     const genId = `req-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
