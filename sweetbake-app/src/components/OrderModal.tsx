@@ -83,7 +83,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
   // Native Date & Time objects
   const [deliveryDate, setDeliveryDate] = useState<Date>(
-    initialDate || new Date(Date.now() + 3 * 24 * 3600 * 1000)
+    initialDate || new Date(Date.now())
   );
 
   // Pop-up picker controllers
@@ -196,13 +196,13 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
       setStatus('Pending');
       setSelectedAddons([]);
-      setTotalPaymentStr('85');
+      setTotalPaymentStr('0');
       setDownPaymentStr('0');
       setExpenses([]);
       setExpenseAmountStr('');
       setExpenseNotes('');
       setShowAddExpense(false);
-      setFulfillmentType('Pickup');
+      setFulfillmentType('Delivery');
       setLocation('');
       setDeliveryCostStr('');
       setDeliveryPerson('');
@@ -214,7 +214,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setCustomRequirements('');
       setReferenceImages([]);
 
-      const target = initialDate || new Date(Date.now() + 3 * 24 * 3600 * 1000);
+      const target = initialDate || new Date(Date.now());
       target.setHours(14, 0, 0, 0);
       setDeliveryDate(target);
     }
@@ -630,7 +630,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
 
               <View style={styles.phoneInputRow}>
                 <Ionicons name="logo-whatsapp" size={18} color="#25D366" style={{ marginRight: 6 }} />
-                
+
                 {/* Country Code Picker Trigger */}
                 <TouchableOpacity
                   style={styles.countryCodePickerBtn}
@@ -822,9 +822,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       <Text style={styles.handoverPickerBtnText}>
                         {deliveryHandoverDate
                           ? deliveryHandoverDate.toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                            })
+                            month: 'short',
+                            day: 'numeric',
+                          })
                           : 'Set Date'}
                       </Text>
                     </TouchableOpacity>
@@ -846,10 +846,10 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                       <Text style={styles.handoverPickerBtnText}>
                         {deliveryHandoverDate
                           ? deliveryHandoverDate.toLocaleTimeString(undefined, {
-                              hour: 'numeric',
-                              minute: '2-digit',
-                              hour12: true,
-                            })
+                            hour: 'numeric',
+                            minute: '2-digit',
+                            hour12: true,
+                          })
                           : 'Set Time'}
                       </Text>
                     </TouchableOpacity>

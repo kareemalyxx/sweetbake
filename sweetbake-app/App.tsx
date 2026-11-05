@@ -76,7 +76,7 @@ export default function App() {
       (cloudOrders) => {
         if (cloudOrders && cloudOrders.length > 0) {
           setOrders(cloudOrders);
-          StorageService.saveOrders(cloudOrders).catch(() => {});
+          StorageService.saveOrders(cloudOrders).catch(() => { });
         }
       },
       (err) => console.warn('Firestore orders sync notice:', err.message)
@@ -86,7 +86,7 @@ export default function App() {
       (cloudReqs) => {
         if (cloudReqs && cloudReqs.length > 0) {
           setRequirements(cloudReqs);
-          StorageService.saveRequirements(cloudReqs).catch(() => {});
+          StorageService.saveRequirements(cloudReqs).catch(() => { });
         }
       },
       (err) => console.warn('Firestore requirements sync notice:', err.message)
@@ -130,7 +130,7 @@ export default function App() {
     let updatedOrders: CakeOrder[];
     let targetOrderId = orderData.id;
 
-    const totalVal = orderData.quotedPrice ?? 85;
+    const totalVal = orderData.quotedPrice ?? 0;
     const downVal = orderData.downPayment ?? 0;
     const remainingVal = Math.max(0, totalVal - downVal);
 
@@ -139,12 +139,12 @@ export default function App() {
       updatedOrders = orders.map((o) =>
         o.id === orderData.id
           ? ({
-              ...o,
-              ...orderData,
-              quotedPrice: totalVal,
-              downPayment: downVal,
-              remainingPayment: remainingVal,
-            } as CakeOrder)
+            ...o,
+            ...orderData,
+            quotedPrice: totalVal,
+            downPayment: downVal,
+            remainingPayment: remainingVal,
+          } as CakeOrder)
           : o
       );
     } else {
@@ -156,16 +156,16 @@ export default function App() {
         customerPhone: orderData.customerPhone,
         customerInstagram: orderData.customerInstagram,
         deliveryDate: orderData.deliveryDate || new Date().toISOString(),
-        cakeType: orderData.cakeType || 'Celebration Cake',
-        shape: orderData.shape || 'Round',
-        flavor: orderData.flavor || 'Vanilla Bean & Berry',
+        cakeType: orderData.cakeType || '',
+        shape: orderData.shape || '',
+        flavor: orderData.flavor || '',
         addons: orderData.addons || [],
         customRequirements: orderData.customRequirements || '',
         status: orderData.status || 'Pending',
         quotedPrice: totalVal,
         downPayment: downVal,
         remainingPayment: remainingVal,
-        fulfillmentType: orderData.fulfillmentType || 'Pickup',
+        fulfillmentType: orderData.fulfillmentType || 'Delivery',
         location: orderData.location || '',
         deliveryCost: orderData.deliveryCost,
         deliveryPerson: orderData.deliveryPerson,
@@ -195,7 +195,7 @@ export default function App() {
             FirestoreService.saveExpense({
               ...exp,
               orderId: targetOrderId,
-            }).catch(() => {});
+            }).catch(() => { });
           });
         }
 
@@ -236,7 +236,7 @@ export default function App() {
           const existed = expenses.some((e) => e.id === deliveryExpenseId);
           if (existed) {
             setExpenses((prev) => prev.filter((e) => e.id !== deliveryExpenseId));
-            FirestoreService.deleteExpense(deliveryExpenseId).catch(() => {});
+            FirestoreService.deleteExpense(deliveryExpenseId).catch(() => { });
           }
         }
       }
@@ -256,8 +256,8 @@ export default function App() {
       const addonList: string[] = Array.isArray(orderData.addons)
         ? orderData.addons
         : orderData.addons && typeof orderData.addons === 'object'
-        ? Object.keys(orderData.addons)
-        : [];
+          ? Object.keys(orderData.addons)
+          : [];
 
       // Clean list of addon titles for comparison
       const trimmedAddons = addonList.map((a) => a.trim()).filter(Boolean);
@@ -278,7 +278,7 @@ export default function App() {
 
       // Delete removed add-ons from Firestore
       toDeleteReqs.forEach((r) => {
-        FirestoreService.deleteRequirement(r.id).catch(() => {});
+        FirestoreService.deleteRequirement(r.id).catch(() => { });
       });
 
       // 3. Keep requirements without the removed ones
@@ -318,7 +318,7 @@ export default function App() {
       currentReqs
         .filter((r) => r.orderId === targetOrderId && r.category === 'Add-ons')
         .forEach((req) => {
-          FirestoreService.saveRequirement(req).catch(() => {});
+          FirestoreService.saveRequirement(req).catch(() => { });
         });
     }
   };
@@ -353,7 +353,7 @@ export default function App() {
       // Remove from Firestore
       requirements
         .filter((r) => r.orderId === id)
-        .forEach((r) => FirestoreService.deleteRequirement(r.id).catch(() => {}));
+        .forEach((r) => FirestoreService.deleteRequirement(r.id).catch(() => { }));
     }
   };
 
@@ -471,14 +471,14 @@ export default function App() {
     const updated = [newReq, ...requirements];
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-    FirestoreService.saveRequirement(newReq).catch(() => {});
+    FirestoreService.saveRequirement(newReq).catch(() => { });
   };
 
   const handleDeleteRequirement = async (id: string) => {
     const updated = requirements.filter((r) => r.id !== id);
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-    FirestoreService.deleteRequirement(id).catch(() => {});
+    FirestoreService.deleteRequirement(id).catch(() => { });
   };
 
   const handleClearCompleted = async (category?: RequirementCategory) => {
@@ -490,7 +490,7 @@ export default function App() {
     );
     setRequirements(updated);
     await StorageService.saveRequirements(updated);
-    completedIds.forEach((id) => FirestoreService.deleteRequirement(id).catch(() => {}));
+    completedIds.forEach((id) => FirestoreService.deleteRequirement(id).catch(() => { }));
   };
 
   const handleDismissNotification = async (notifId: string) => {
@@ -523,7 +523,7 @@ export default function App() {
       if (Array.isArray(o.expenses) && o.expenses.some((e) => e.id === cleanId || e.id === targetExpId || e.id === transactionOrExpenseId || `exp-${e.id}` === transactionOrExpenseId)) {
         const filtered = o.expenses.filter((e) => e.id !== cleanId && e.id !== targetExpId && e.id !== transactionOrExpenseId && `exp-${e.id}` !== transactionOrExpenseId);
         const newOrder = { ...o, expenses: filtered };
-        FirestoreService.saveOrder(newOrder).catch(() => {});
+        FirestoreService.saveOrder(newOrder).catch(() => { });
         return newOrder;
       }
       return o;
@@ -548,7 +548,7 @@ export default function App() {
       await StorageService.saveRequirements(updatedReqs);
       const cleaned = updatedReqs.find((r) => r.id === targetReq.id || r.reqId === targetReq.id);
       if (cleaned) {
-        FirestoreService.saveRequirement(cleaned).catch(() => {});
+        FirestoreService.saveRequirement(cleaned).catch(() => { });
       }
     }
   };
@@ -1078,7 +1078,7 @@ export default function App() {
           </ScrollView>
         </SafeAreaView>
       </Modal>
-    
+
       {/* Firebase Auth Modal */}
       <AuthModal
         visible={showAuthModal}

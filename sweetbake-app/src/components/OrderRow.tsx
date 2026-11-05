@@ -1,11 +1,15 @@
-import React from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, Image, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { CakeOrder } from '../types';
 import { Theme } from '../theme';
 import { StatusPill } from './StatusPill';
 import { NotificationService } from '../services/notifications';
 import { triggerHaptic } from '../services/haptics';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface OrderRowProps {
   order: CakeOrder;
@@ -20,6 +24,8 @@ export const OrderRow: React.FC<OrderRowProps> = ({
   onQuickAdvance,
   onDelete,
 }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
   const deliveryDate = new Date(order.deliveryDate);
   const formattedDate = deliveryDate.toLocaleDateString(undefined, {
     month: 'short',
@@ -38,238 +44,288 @@ export const OrderRow: React.FC<OrderRowProps> = ({
   const totalExpenses = (order.expenses || []).reduce((sum, e) => sum + (e.amount || 0), 0);
   const profit = order.quotedPrice - totalExpenses;
 
+  const toggleExpand = () => {
+    triggerHaptic.selection();
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsExpanded(!isExpanded);
+  };
+
   return (
     <TouchableOpacity
       style={styles.container}
-      activeOpacity={0.85}
-      onPress={onPress}
+      activeOpacity={0.92}
+      onPress={toggleExpand}
     >
-      <View style={styles.contentRow}>
-        {/* Cake Preview / Icon */}
-        <View style={styles.imageBox}>
-          {order.referenceImages && order.referenceImages.length > 0 ? (
-            <Image
-              source={{ uri: order.referenceImages[0] }}
-              style={styles.image}
-              resizeMode="cover"
-            />
-          ) : (
-            <Ionicons name="sparkles" size={24} color={Theme.colors.softLilac} />
-          )}
+      {/* Row 1: Customer Full Name (80% width) + Expand/Collapse Indicator */}
+      <View style={styles.nameHeaderRow}>
+        <View style={styles.nameContainer}>
+          <Text style={styles.customerName} numberOfLines={2}>
+            {order.customerName}
+          </Text>
         </View>
 
-        {/* Center Details */}
-        <View style={styles.details}>
-          <View style={styles.topLine}>
-            <Text style={styles.customerName} numberOfLines={1}>
-              {order.customerName}
+        <View style={styles.priceAndChevron}>
+          <Text style={styles.price}>${order.quotedPrice.toFixed(2)}</Text>
+          <Ionicons
+            name={isExpanded ? 'chevron-up' : 'chevron-down'}
+            size={16}
+            color={Theme.colors.textSecondary}
+            style={{ marginLeft: 6 }}
+          />
+        </View>
+      </View>
+
+      {/* Row 2: 4 Action Buttons (Copy, WhatsApp, Instagram, Delete) */}
+      <View style={styles.actionButtonsRow}>
+        {/* 1. Copy Message */}
+        <TouchableOpacity
+          style={styles.actionBtn}
+          onPress={() => {
+            triggerHaptic.light();
+            NotificationService.copyOrderMessage({
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
+              customerInstagram: order.customerInstagram,
+              deliveryDate: order.deliveryDate,
+              cakeType: order.cakeType,
+              shape: order.shape,
+              flavor: order.flavor,
+              fulfillmentType: order.fulfillmentType,
+              location: order.location,
+              quotedPrice: order.quotedPrice,
+              remainingPayment: remaining,
+            });
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="copy-outline" size={15} color={Theme.colors.textDark} style={{ marginRight: 4 }} />
+          <Text style={styles.actionBtnText}>Copy</Text>
+        </TouchableOpacity>
+
+        {/* 2. WhatsApp */}
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.whatsAppBtn]}
+          onPress={() => {
+            triggerHaptic.medium();
+            NotificationService.sendWhatsAppNotification({
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
+              deliveryDate: order.deliveryDate,
+              cakeType: order.cakeType,
+              shape: order.shape,
+              flavor: order.flavor,
+              fulfillmentType: order.fulfillmentType,
+              location: order.location,
+              quotedPrice: order.quotedPrice,
+              remainingPayment: remaining,
+            });
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+          <Text style={[styles.actionBtnText, styles.actionBtnTextWhite]}>WhatsApp</Text>
+        </TouchableOpacity>
+
+        {/* 3. Instagram */}
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.instagramBtn]}
+          onPress={() => {
+            triggerHaptic.medium();
+            NotificationService.sendInstagramNotification({
+              customerName: order.customerName,
+              customerPhone: order.customerPhone,
+              customerInstagram: order.customerInstagram,
+              deliveryDate: order.deliveryDate,
+              cakeType: order.cakeType,
+              shape: order.shape,
+              flavor: order.flavor,
+              fulfillmentType: order.fulfillmentType,
+              location: order.location,
+              quotedPrice: order.quotedPrice,
+              remainingPayment: remaining,
+            });
+          }}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="logo-instagram" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+          <Text style={[styles.actionBtnText, styles.actionBtnTextWhite]}>Instagram</Text>
+        </TouchableOpacity>
+
+        {/* 4. Delete */}
+        <TouchableOpacity
+          style={[styles.actionBtn, styles.deleteBtn]}
+          onPress={onDelete}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="trash-outline" size={15} color="#C62828" style={{ marginRight: 4 }} />
+          <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Row 3: Schedule Date & Time + Status Update Button */}
+      <View style={styles.scheduleStatusRow}>
+        <View style={styles.dateTimeContainer}>
+          <Ionicons name="calendar-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+          <Text style={styles.scheduleDateText}>{formattedDate}</Text>
+          <Text style={styles.dotSeparator}>•</Text>
+          <StatusPill status={order.status} />
+        </View>
+
+        {order.status !== 'Delivered' ? (
+          <TouchableOpacity
+            style={styles.advanceStatusButton}
+            onPress={onQuickAdvance}
+            activeOpacity={0.75}
+          >
+            <Text style={styles.advanceStatusText}>
+              {nextStatusLabel[order.status] || 'Update Status'}
             </Text>
-            <View style={styles.priceContainer}>
-              <Text style={styles.price}>${order.quotedPrice.toFixed(2)}</Text>
-              {remaining > 0 ? (
-                <Text style={styles.remainingDueText}>(${remaining.toFixed(0)} due)</Text>
-              ) : (
-                <Text style={styles.paidBadgeText}>✓ Paid</Text>
-              )}
+            <Ionicons name="chevron-forward" size={13} color="#FFFFFF" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.completedBadge}>
+            <Ionicons name="checkmark-circle" size={14} color="#2E7D32" style={{ marginRight: 3 }} />
+            <Text style={styles.completedBadgeText}>Completed</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Collapsible Details: Revealed when full card is tapped */}
+      {isExpanded && (
+        <View style={styles.expandedSection}>
+          <View style={styles.divider} />
+
+          {/* Quick Edit Details CTA */}
+          <View style={styles.expandedHeaderRow}>
+            <Text style={styles.expandedSectionTitle}>Order Preparation Details</Text>
+            <TouchableOpacity
+              style={styles.editOrderBtn}
+              onPress={onPress}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 3 }} />
+              <Text style={styles.editOrderBtnText}>Edit Order</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Cake Specs Grid */}
+          <View style={styles.prepGrid}>
+            <View style={styles.prepItem}>
+              <Text style={styles.prepLabel}>Type</Text>
+              <Text style={styles.prepValue}>{order.cakeType || 'Standard'}</Text>
+            </View>
+
+            <View style={styles.prepItem}>
+              <Text style={styles.prepLabel}>Shape</Text>
+              <Text style={styles.prepValue}>{order.shape || 'Round'}</Text>
+            </View>
+
+            <View style={styles.prepItem}>
+              <Text style={styles.prepLabel}>Flavor</Text>
+              <Text style={styles.prepValue}>{order.flavor || 'Vanilla'}</Text>
+            </View>
+
+            <View style={styles.prepItem}>
+              <Text style={styles.prepLabel}>Fulfillment</Text>
+              <Text style={styles.prepValue}>{order.fulfillmentType || 'Pickup'}</Text>
             </View>
           </View>
 
-          <Text style={styles.cakeType} numberOfLines={1}>
-            {order.cakeType} • {order.shape}
-          </Text>
+          {/* Custom Requirements / Baking Notes */}
+          {Boolean(order.customRequirements) && (
+            <View style={styles.prepCardBox}>
+              <View style={styles.prepBoxHeader}>
+                <Ionicons name="document-text-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                <Text style={styles.prepBoxTitle}>Baking & Decoration Instructions</Text>
+              </View>
+              <Text style={styles.prepBoxBody}>{order.customRequirements}</Text>
+            </View>
+          )}
 
-          {/* Schedule & Fulfillment Line */}
-          <View style={styles.scheduleRow}>
-            <Ionicons
-              name={order.fulfillmentType === 'Delivery' ? 'car-outline' : 'storefront-outline'}
-              size={12}
-              color={Theme.colors.deepRose}
-              style={{ marginRight: 4 }}
-            />
-            <Text style={styles.fulfillmentTag}>
-              {order.fulfillmentType === 'Delivery' ? 'Delivery' : 'Pickup'}
-            </Text>
-            <Text style={styles.dotSeparator}>•</Text>
-            <Ionicons name="calendar-outline" size={12} color={Theme.colors.textSecondary} style={{ marginRight: 4 }} />
-            <Text style={styles.dateText}>{formattedDate}</Text>
-          </View>
+          {/* Add-ons List */}
+          {order.addons && order.addons.length > 0 && (
+            <View style={styles.addonsSection}>
+              <Text style={styles.prepLabel}>Add-ons & Extras</Text>
+              <View style={styles.addonsList}>
+                {order.addons.map((addon, index) => (
+                  <View key={`${addon}-${index}`} style={styles.addonTag}>
+                    <Ionicons name="sparkles" size={10} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                    <Text style={styles.addonTagText}>{addon}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
 
-          {/* Location note if present */}
+          {/* Fulfillment & Location */}
           {Boolean(order.location) && (
-            <View style={styles.locationRow}>
-              <Ionicons name="location-outline" size={11} color={Theme.colors.textSecondary} style={{ marginRight: 3 }} />
-              <Text style={styles.locationText} numberOfLines={1}>
+            <View style={styles.infoRowItem}>
+              <Ionicons name="location-outline" size={13} color={Theme.colors.textSecondary} style={{ marginRight: 5 }} />
+              <Text style={styles.infoRowText}>
+                <Text style={{ fontWeight: '700' }}>Location: </Text>
                 {order.location}
               </Text>
             </View>
           )}
 
-          {/* Delivery Dispatch Summary (Driver, Cost, Handover time) */}
+          {/* Delivery Handover / Driver */}
           {order.fulfillmentType === 'Delivery' && (order.deliveryPerson || order.deliveryCost !== undefined || order.deliveryHandoverTime) && (
-            <View style={styles.deliveryInfoRow}>
-              <Ionicons name="bicycle-outline" size={11} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
-              <Text style={styles.deliveryInfoText} numberOfLines={1}>
+            <View style={styles.infoRowItem}>
+              <Ionicons name="bicycle-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 5 }} />
+              <Text style={styles.infoRowText}>
                 {[
                   order.deliveryPerson ? `Driver: ${order.deliveryPerson}` : null,
-                  order.deliveryCost !== undefined ? `Fee: $${order.deliveryCost.toFixed(2)}` : null,
+                  order.deliveryCost !== undefined ? `Delivery Fee: $${order.deliveryCost.toFixed(2)}` : null,
                   order.deliveryHandoverTime ? `Handover: ${new Date(order.deliveryHandoverTime).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit', hour12: true })}` : null,
                 ].filter(Boolean).join(' • ')}
               </Text>
             </View>
           )}
 
-          {/* Badges / Status row */}
-          <View style={styles.bottomRow}>
-            <StatusPill status={order.status} />
-
-            {order.flavor ? (
-              <View style={styles.flavorPill}>
-                <Text style={styles.flavorText} numberOfLines={1}>
-                  {order.flavor}
-                </Text>
-              </View>
-            ) : null}
-
-            {order.addons && order.addons.length > 0 ? (
-              <View style={styles.addonsPill}>
-                <Ionicons name="sparkles" size={12} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
-                <Text style={styles.addonsText} numberOfLines={1}>
-                  +{order.addons.length} Add-on{order.addons.length > 1 ? 's' : ''}
-                </Text>
-              </View>
-            ) : null}
-
-            {totalExpenses > 0 && (
-              <View style={styles.profitPill}>
-                <Ionicons
-                  name={profit >= 0 ? 'trending-up' : 'trending-down'}
-                  size={12}
-                  color={profit >= 0 ? '#2E7D32' : '#C62828'}
-                  style={{ marginRight: 4 }}
-                />
-                <Text
-                  style={[
-                    styles.profitPillText,
-                    { color: profit >= 0 ? '#2E7D32' : '#C62828' },
-                  ]}
-                  numberOfLines={1}
-                >
-                  ${profit.toFixed(0)} profit
-                </Text>
-              </View>
-            )}
-
-            {order.reminderEnabled && (
-              <View style={styles.reminderBadge}>
-                <Ionicons name="notifications" size={13} color={Theme.colors.softLilac} />
-              </View>
-            )}
-
-            {order.referenceImages && order.referenceImages.length > 1 && (
-              <View style={styles.photoCountBadge}>
-                <Ionicons name="images-outline" size={12} color={Theme.colors.textSecondary} />
-                <Text style={styles.photoCountText}>+{order.referenceImages.length - 1}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-        {/* Action column */}
-        <View style={styles.actionColumn}>
-          {order.status !== 'Delivered' && (
-            <TouchableOpacity
-              style={styles.advanceButton}
-              onPress={onQuickAdvance}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.advanceText}>
-                {nextStatusLabel[order.status] || 'Next'}
+          {/* Financial Breakdown */}
+          <View style={styles.financeSummaryRow}>
+            <View style={styles.financeItem}>
+              <Text style={styles.financeLabel}>Quoted</Text>
+              <Text style={styles.financeValue}>${order.quotedPrice.toFixed(2)}</Text>
+            </View>
+            <View style={styles.financeItem}>
+              <Text style={styles.financeLabel}>Down Payment</Text>
+              <Text style={styles.financeValue}>${(order.downPayment || 0).toFixed(2)}</Text>
+            </View>
+            <View style={styles.financeItem}>
+              <Text style={styles.financeLabel}>Remaining</Text>
+              <Text style={[styles.financeValue, { color: remaining > 0 ? '#D81B60' : '#2E7D32' }]}>
+                {remaining > 0 ? `$${remaining.toFixed(2)}` : 'Paid'}
               </Text>
-              <Ionicons name="chevron-forward" size={13} color="#FFFFFF" />
-            </TouchableOpacity>
-          )}
-
-          <View style={styles.iconActionRow}>
-            {/* Quick Copy Message to Clipboard */}
-            <TouchableOpacity
-              style={styles.copyIconBtn}
-              onPress={() => {
-                triggerHaptic.light();
-                NotificationService.copyOrderMessage({
-                  customerName: order.customerName,
-                  customerPhone: order.customerPhone,
-                  deliveryDate: order.deliveryDate,
-                  cakeType: order.cakeType,
-                  shape: order.shape,
-                  flavor: order.flavor,
-                  fulfillmentType: order.fulfillmentType,
-                  location: order.location,
-                  quotedPrice: order.quotedPrice,
-                  remainingPayment: remaining,
-                });
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="copy-outline" size={17} color={Theme.colors.textSecondary} />
-            </TouchableOpacity>
-
-            {/* Quick Instagram Share / Profile Trigger */}
-            <TouchableOpacity
-              style={styles.instagramIconBtn}
-              onPress={() => {
-                triggerHaptic.medium();
-                NotificationService.sendInstagramNotification({
-                  customerName: order.customerName,
-                  customerPhone: order.customerPhone,
-                  customerInstagram: order.customerInstagram,
-                  deliveryDate: order.deliveryDate,
-                  cakeType: order.cakeType,
-                  shape: order.shape,
-                  flavor: order.flavor,
-                  fulfillmentType: order.fulfillmentType,
-                  location: order.location,
-                  quotedPrice: order.quotedPrice,
-                  remainingPayment: remaining,
-                });
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="logo-instagram" size={18} color="#E1306C" />
-            </TouchableOpacity>
-
-            {/* Quick WhatsApp Reminder Trigger */}
-            <TouchableOpacity
-              style={styles.whatsAppIconBtn}
-              onPress={() => {
-                triggerHaptic.medium();
-                NotificationService.sendWhatsAppNotification({
-                  customerName: order.customerName,
-                  customerPhone: order.customerPhone,
-                  deliveryDate: order.deliveryDate,
-                  cakeType: order.cakeType,
-                  shape: order.shape,
-                  flavor: order.flavor,
-                  fulfillmentType: order.fulfillmentType,
-                  location: order.location,
-                  quotedPrice: order.quotedPrice,
-                  remainingPayment: remaining,
-                });
-              }}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name="logo-whatsapp" size={19} color="#25D366" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.deleteButton}
-              onPress={onDelete}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              <Ionicons name="trash-outline" size={18} color={Theme.colors.textSecondary} />
-            </TouchableOpacity>
+            </View>
+            {totalExpenses > 0 && (
+              <View style={styles.financeItem}>
+                <Text style={styles.financeLabel}>Est. Profit</Text>
+                <Text style={[styles.financeValue, { color: profit >= 0 ? '#2E7D32' : '#C62828' }]}>
+                  ${profit.toFixed(2)}
+                </Text>
+              </View>
+            )}
           </View>
+
+          {/* Reference Images Gallery if any */}
+          {order.referenceImages && order.referenceImages.length > 0 && (
+            <View style={styles.imageGallerySection}>
+              <Text style={styles.prepLabel}>Reference Design Photos ({order.referenceImages.length})</Text>
+              <View style={styles.galleryRow}>
+                {order.referenceImages.map((uri, idx) => (
+                  <Image
+                    key={`img-${idx}`}
+                    source={{ uri }}
+                    style={styles.galleryThumb}
+                    resizeMode="cover"
+                  />
+                ))}
+              </View>
+            </View>
+          )}
         </View>
-      </View>
+      )}
     </TouchableOpacity>
   );
 };
@@ -288,146 +344,115 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 2,
   },
-  contentRow: {
-    flexDirection: 'row',
-  },
-  imageBox: {
-    width: 68,
-    height: 68,
-    borderRadius: 14,
-    backgroundColor: Theme.colors.blushPink,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-    marginRight: 14,
-  },
-  image: {
-    width: '100%',
-    height: '100%',
-  },
-  details: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  topLine: {
+  // Row 1: Full name (80%) + Price/Chevron
+  nameHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  nameContainer: {
+    width: '80%',
+    paddingRight: 6,
   },
   customerName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
     color: Theme.colors.textDark,
-    flex: 1,
-    marginRight: 8,
+    lineHeight: 21,
   },
-  priceContainer: {
-    alignItems: 'flex-end',
+  priceAndChevron: {
+    width: '20%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   price: {
     fontSize: 15,
     fontWeight: '800',
     color: Theme.colors.deepRose,
   },
-  remainingDueText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#D81B60',
-    marginTop: 1,
-  },
-  paidBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2E7D32',
-    marginTop: 1,
-  },
-  cakeType: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: Theme.colors.textSecondary,
-    marginTop: 2,
-  },
-  scheduleRow: {
+  // Row 2: 4 Action Buttons
+  actionButtonsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 10,
   },
-  fulfillmentTag: {
-    fontSize: 12,
+  actionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.cream,
+    paddingVertical: 7,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E8DED8',
+  },
+  whatsAppBtn: {
+    backgroundColor: '#25D366',
+    borderColor: '#25D366',
+  },
+  instagramBtn: {
+    backgroundColor: '#E1306C',
+    borderColor: '#E1306C',
+  },
+  deleteBtn: {
+    backgroundColor: '#FFF0F2',
+    borderColor: '#FFCDD2',
+  },
+  actionBtnText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: Theme.colors.deepRose,
+    color: Theme.colors.textDark,
+  },
+  actionBtnTextWhite: {
+    color: '#FFFFFF',
+  },
+  deleteBtnText: {
+    color: '#C62828',
+  },
+  // Row 3: Date, Time & Status Update
+  scheduleStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dateTimeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    flexWrap: 'wrap',
+  },
+  scheduleDateText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
   },
   dotSeparator: {
     marginHorizontal: 6,
     color: Theme.colors.textSecondary,
     fontSize: 12,
   },
-  dateText: {
-    fontSize: 12,
-    color: Theme.colors.textSecondary,
-  },
-  locationRow: {
+  advanceStatusButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 3,
+    backgroundColor: Theme.colors.deepRose,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 3,
+    marginLeft: 8,
   },
-  locationText: {
-    fontSize: 12,
-    color: Theme.colors.textSecondary,
-    flex: 1,
-  },
-  deliveryInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF5F7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginTop: 3,
-    alignSelf: 'flex-start',
-  },
-  deliveryInfoText: {
+  advanceStatusText: {
+    color: '#FFFFFF',
     fontSize: 11,
     fontWeight: '700',
-    color: Theme.colors.deepRose,
   },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 8,
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  flavorPill: {
-    backgroundColor: Theme.colors.cream,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Theme.colors.border,
-    maxWidth: 110,
-  },
-  flavorText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: Theme.colors.textDark,
-  },
-  addonsPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF0F3',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Theme.colors.roseGold,
-  },
-  addonsText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Theme.colors.deepRose,
-  },
-  profitPill: {
+  completedBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F1F8E9',
@@ -437,68 +462,167 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#C8E6C9',
   },
-  profitPillText: {
+  completedBadgeText: {
     fontSize: 11,
     fontWeight: '700',
+    color: '#2E7D32',
   },
-  reminderBadge: {
-    backgroundColor: Theme.colors.lavenderLight,
-    paddingHorizontal: 7,
-    paddingVertical: 4,
-    borderRadius: 8,
+  // Collapsible section
+  expandedSection: {
+    marginTop: 10,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: Theme.colors.border,
+    marginBottom: 10,
+  },
+  expandedHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
+    marginBottom: 8,
   },
-  photoCountBadge: {
+  expandedSectionTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: Theme.colors.deepRose,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  editOrderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.cream,
-    paddingHorizontal: 6,
+    backgroundColor: '#FFF0F3',
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
-    gap: 3,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
   },
-  photoCountText: {
+  editOrderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  prepGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: Theme.colors.cream,
+    borderRadius: 12,
+    padding: 10,
+    gap: 10,
+    marginBottom: 8,
+  },
+  prepItem: {
+    width: '46%',
+  },
+  prepLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Theme.colors.textSecondary,
+    textTransform: 'uppercase',
+    marginBottom: 2,
+    letterSpacing: 0.3,
+  },
+  prepValue: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  prepCardBox: {
+    backgroundColor: '#FBF9F6',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#EFE8E1',
+    marginBottom: 8,
+  },
+  prepBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  prepBoxTitle: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  prepBoxBody: {
+    fontSize: 12,
+    color: Theme.colors.textDark,
+    lineHeight: 17,
+  },
+  addonsSection: {
+    marginBottom: 8,
+  },
+  addonsList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 4,
+  },
+  addonTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F3',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.roseGold,
+  },
+  addonTagText: {
     fontSize: 11,
     fontWeight: '600',
-    color: Theme.colors.textSecondary,
+    color: Theme.colors.deepRose,
   },
-  actionColumn: {
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    marginLeft: 8,
-    paddingVertical: 2,
-  },
-  advanceButton: {
+  infoRowItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Theme.colors.deepRose,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 10,
-    gap: 3,
+    marginBottom: 6,
   },
-  advanceText: {
-    color: '#FFFFFF',
+  infoRowText: {
+    fontSize: 12,
+    color: Theme.colors.textDark,
+    flex: 1,
+  },
+  financeSummaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#F9F7F3',
+    padding: 10,
+    borderRadius: 10,
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  financeItem: {
+    alignItems: 'center',
+  },
+  financeLabel: {
+    fontSize: 10,
+    color: Theme.colors.textSecondary,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  financeValue: {
     fontSize: 12,
     fontWeight: '700',
+    color: Theme.colors.textDark,
   },
-  iconActionRow: {
+  imageGallerySection: {
+    marginTop: 4,
+  },
+  galleryRow: {
     flexDirection: 'row',
-    alignItems: 'center',
     gap: 8,
+    marginTop: 6,
   },
-  copyIconBtn: {
-    padding: 6,
-  },
-  whatsAppIconBtn: {
-    padding: 6,
-  },
-  instagramIconBtn: {
-    padding: 6,
-  },
-  deleteButton: {
-    padding: 6,
+  galleryThumb: {
+    width: 52,
+    height: 52,
+    borderRadius: 10,
+    backgroundColor: Theme.colors.blushPink,
   },
 });
+
 

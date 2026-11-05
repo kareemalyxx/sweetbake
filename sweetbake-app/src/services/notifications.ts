@@ -97,6 +97,7 @@ export const NotificationService = {
   async copyOrderMessage(order: {
     customerName: string;
     customerPhone?: string;
+    customerInstagram?: string;
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
