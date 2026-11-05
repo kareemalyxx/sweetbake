@@ -23,7 +23,8 @@ service cloud.firestore {
     //   - deliveryDate: timestamp or string (required, valid timestamp or ISO-8601 string <= 50 chars)
     //   - cakeType: string (required, 1..100 chars)
     //   - shape: string (required, 1..50 chars)
-    //   - flavor: string (required, 1..100 chars)
+    //   - flavor: list of strings (1..20 items, array of flavors) or string (backward compatibility, 1..200 chars)
+    //   - flavors: list of strings (optional, max 20 items)
     //   - customRequirements: string (optional, 0..3000 chars)
     //   - status: string (required, enum: 'Pending'|'Baking'|'Decorating'|'Delivered')
     //   - quotedPrice: number (required, >= 0, <= 1000000)
@@ -128,7 +129,7 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       let allowed = [
-        'id', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'shape', 'flavor',
+        'id', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'flavors',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location',
         'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
@@ -145,7 +146,9 @@ service cloud.firestore {
         isValidTimestampOrIsoDate(data.deliveryDate) &&
         data.cakeType is string && data.cakeType.size() > 0 && data.cakeType.size() <= 100 &&
         data.shape is string && data.shape.size() > 0 && data.shape.size() <= 50 &&
-        data.flavor is string && data.flavor.size() > 0 && data.flavor.size() <= 100 &&
+        ((data.flavor is list && data.flavor.size() > 0 && data.flavor.size() <= 20) ||
+         (data.flavor is string && data.flavor.size() > 0 && data.flavor.size() <= 200)) &&
+        (!('flavors' in data) || (data.flavors is list && data.flavors.size() <= 20)) &&
         data.status in validStatuses &&
         data.quotedPrice is number && data.quotedPrice >= 0 && data.quotedPrice <= 1000000 &&
         (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&

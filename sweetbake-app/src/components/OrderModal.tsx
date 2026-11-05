@@ -50,7 +50,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [customerName, setCustomerName] = useState('');
   const [cakeType, setCakeType] = useState(CAKE_TYPES[0]);
   const [shape, setShape] = useState(CAKE_SHAPES[0]);
-  const [flavor, setFlavor] = useState(CAKE_FLAVORS[0]);
+  const [selectedFlavors, setSelectedFlavors] = useState<string[]>([CAKE_FLAVORS[0]]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [status, setStatus] = useState<OrderStatus>('Pending');
 
@@ -154,7 +154,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setCustomerPhone(parsed.nationalNumber);
       setCakeType(orderToEdit.cakeType);
       setShape(orderToEdit.shape);
-      setFlavor(orderToEdit.flavor);
+      // Support reading string or array of flavors
+      if (Array.isArray(orderToEdit.flavor)) {
+        setSelectedFlavors(orderToEdit.flavor.length > 0 ? orderToEdit.flavor : [CAKE_FLAVORS[0]]);
+      } else if (typeof orderToEdit.flavor === 'string' && orderToEdit.flavor.trim()) {
+        setSelectedFlavors([orderToEdit.flavor.trim()]);
+      } else {
+        setSelectedFlavors([CAKE_FLAVORS[0]]);
+      }
       setStatus(orderToEdit.status);
       // Convert addons to string[] array format
       if (Array.isArray(orderToEdit.addons)) {
@@ -193,7 +200,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setCustomerInstagram('');
       setCakeType(availableCakeTypes[0] || CAKE_TYPES[0]);
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
-      setFlavor(availableFlavors[0] || CAKE_FLAVORS[0]);
+      setSelectedFlavors([availableFlavors[0] || CAKE_FLAVORS[0]]);
       setStatus('Pending');
       setSelectedAddons([]);
       setTotalPaymentStr('0');
@@ -343,7 +350,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     const trimmed = newFlavorInput.trim();
     if (!trimmed) return;
     if (availableFlavors.includes(trimmed)) {
-      setFlavor(trimmed);
+      if (!selectedFlavors.includes(trimmed)) {
+        setSelectedFlavors([...selectedFlavors, trimmed]);
+      }
       setNewFlavorInput('');
       setShowAddFlavor(false);
       return;
@@ -351,10 +360,24 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     triggerHaptic.success();
     const updated = [...availableFlavors, trimmed];
     setAvailableFlavors(updated);
-    setFlavor(trimmed);
+    if (!selectedFlavors.includes(trimmed)) {
+      setSelectedFlavors([...selectedFlavors, trimmed]);
+    }
     setNewFlavorInput('');
     setShowAddFlavor(false);
     await StorageService.saveFlavors(updated);
+  };
+
+  const toggleFlavor = (f: string) => {
+    triggerHaptic.selection();
+    if (selectedFlavors.includes(f)) {
+      // Keep at least one flavor selected if possible
+      if (selectedFlavors.length > 1) {
+        setSelectedFlavors(selectedFlavors.filter((item) => item !== f));
+      }
+    } else {
+      setSelectedFlavors([...selectedFlavors, f]);
+    }
   };
 
   const handleAddNewType = async () => {
@@ -444,7 +467,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     if (category === 'Flavor') {
       const updated = availableFlavors.map((f) => (f === oldValue ? newVal : f));
       setAvailableFlavors(updated);
-      if (flavor === oldValue) setFlavor(newVal);
+      if (selectedFlavors.includes(oldValue)) {
+        setSelectedFlavors(selectedFlavors.map((f) => (f === oldValue ? newVal : f)));
+      }
       await StorageService.saveFlavors(updated);
     } else if (category === 'Type') {
       const updated = availableCakeTypes.map((t) => (t === oldValue ? newVal : t));
@@ -562,7 +587,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       customerInstagram: customerInstagram.trim() || undefined,
       cakeType,
       shape,
-      flavor,
+      flavor: selectedFlavors.length > 0 ? selectedFlavors : [CAKE_FLAVORS[0]],
       addons: selectedAddons,
       status,
       quotedPrice: totalVal,
@@ -1292,7 +1317,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             deliveryDate: deliveryDate.toISOString(),
                             cakeType,
                             shape,
-                            flavor,
+                            flavor: selectedFlavors,
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
@@ -1316,7 +1341,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             deliveryDate: deliveryDate.toISOString(),
                             cakeType,
                             shape,
-                            flavor,
+                            flavor: selectedFlavors,
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
@@ -1342,7 +1367,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                             deliveryDate: deliveryDate.toISOString(),
                             cakeType,
                             shape,
-                            flavor,
+                            flavor: selectedFlavors,
                             fulfillmentType,
                             location: location.trim(),
                             quotedPrice: totalVal,
@@ -1459,9 +1484,9 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 ))}
               </ScrollView>
 
-              {/* 3. Flavor & Filling */}
+              {/* 3. Flavor & Filling (Multi-select) */}
               <View style={styles.titleWithAction}>
-                <Text style={styles.fieldLabel}>Flavor & Filling</Text>
+                <Text style={styles.fieldLabel}>Flavor & Filling (Multi-select)</Text>
                 <TouchableOpacity
                   onPress={() => setShowAddFlavor(!showAddFlavor)}
                   style={styles.inlineAddBtn}
@@ -1487,22 +1512,22 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               )}
 
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
-                {availableFlavors.map((f) => (
-                  <TouchableOpacity
-                    key={f}
-                    style={[styles.chip, flavor === f && styles.chipActive]}
-                    onPress={() => {
-                      triggerHaptic.selection();
-                      setFlavor(f);
-                    }}
-                    onLongPress={() => openRenameModal('Flavor', f)}
-                    delayLongPress={450}
-                  >
-                    <Text style={[styles.chipText, flavor === f && styles.chipTextActive]}>
-                      {f}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {availableFlavors.map((f) => {
+                  const isSelected = selectedFlavors.includes(f);
+                  return (
+                    <TouchableOpacity
+                      key={f}
+                      style={[styles.chip, isSelected && styles.chipActive]}
+                      onPress={() => toggleFlavor(f)}
+                      onLongPress={() => openRenameModal('Flavor', f)}
+                      delayLongPress={450}
+                    >
+                      <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>
+                        {isSelected ? `✓ ${f}` : f}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </ScrollView>
 
               {/* 4. Multi-select Add-ons */}

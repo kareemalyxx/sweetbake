@@ -21,7 +21,7 @@ export interface CakeOrder {
   deliveryDate: string; // ISO String
   cakeType: string;
   shape: string;
-  flavor: string;
+  flavor: string | string[]; // Array of flavors (also accepts legacy string on read)
   addons?: string[]; // Multiselection for custom addons (completion tracked in requirements)
   customRequirements: string;
   status: OrderStatus;

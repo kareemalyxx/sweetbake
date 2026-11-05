@@ -103,7 +103,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
           dateStr: orderDate.toISOString(),
           amount: o.quotedPrice || 0,
           title: o.customerName || 'Cake Commission',
-          subtitle: `${o.cakeType} • ${o.flavor || 'Custom'} (${o.status})`,
+          subtitle: `${o.cakeType} • ${Array.isArray(o.flavor) ? (o.flavor.length > 0 ? o.flavor.join(', ') : 'Custom') : (o.flavor || 'Custom')} (${o.status})`,
           badgeText: (o.downPayment || 0) > 0 ? `Paid: $${o.downPayment}` : undefined,
           orderId: o.id,
         });

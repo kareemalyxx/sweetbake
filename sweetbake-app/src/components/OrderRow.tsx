@@ -228,7 +228,11 @@ export const OrderRow: React.FC<OrderRowProps> = ({
 
             <View style={styles.prepItem}>
               <Text style={styles.prepLabel}>Flavor</Text>
-              <Text style={styles.prepValue}>{order.flavor || 'Kinder'}</Text>
+              <Text style={styles.prepValue}>
+                {Array.isArray(order.flavor)
+                  ? (order.flavor.length > 0 ? order.flavor.join(', ') : 'Kinder')
+                  : (order.flavor || 'Kinder')}
+              </Text>
             </View>
 
             <View style={styles.prepItem}>

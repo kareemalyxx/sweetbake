@@ -107,8 +107,8 @@ export const NormalizedStorage = {
         cakeTypeName: legacy.cakeType,
         shapeId: legacy.shape,
         shapeName: legacy.shape,
-        flavorId: legacy.flavor,
-        flavorName: legacy.flavor,
+        flavorId: Array.isArray(legacy.flavor) ? legacy.flavor.join(', ') : (legacy.flavor || ''),
+        flavorName: Array.isArray(legacy.flavor) ? legacy.flavor.join(', ') : (legacy.flavor || ''),
         customRequirements: legacy.customRequirements || '',
       },
       addons: Array.isArray(legacy.addons)

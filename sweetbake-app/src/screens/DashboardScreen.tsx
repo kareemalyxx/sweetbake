@@ -46,11 +46,12 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         : o.status === selectedFilter;
 
       const term = search.toLowerCase().trim();
+      const flavorStr = Array.isArray(o.flavor) ? o.flavor.join(' ') : (o.flavor || '');
       const matchSearch =
         !term ||
         o.customerName.toLowerCase().includes(term) ||
         o.cakeType.toLowerCase().includes(term) ||
-        o.flavor.toLowerCase().includes(term);
+        flavorStr.toLowerCase().includes(term);
 
       let matchDate = true;
       if (selectedDateFilter) {

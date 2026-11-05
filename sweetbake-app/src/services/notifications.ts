@@ -51,7 +51,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
-    flavor?: string;
+    flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
@@ -68,11 +68,15 @@ export const NotificationService = {
     const isPickup = (order.fulfillmentType || '').toLowerCase() === 'pickup';
     const pickupMapLink = 'https://maps.app.goo.gl/yALiMNtrgbG5EKgK6?g_st=ic';
 
+    const flavorDisplay = Array.isArray(order.flavor)
+      ? (order.flavor.length > 0 ? order.flavor.join(', ') : 'Custom')
+      : (order.flavor || 'Custom');
+
     const lines = [
       `🎂 *Kake Order Update*`,
       `Hi ${order.customerName}! Here are the details for your custom cake commission:`,
       ``,
-      `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${order.flavor || 'Custom'})`,
+      `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${flavorDisplay})`,
       `📅 *Schedule:* ${formattedDate}`,
     ];
 
@@ -118,7 +122,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
-    flavor?: string;
+    flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
@@ -144,7 +148,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
-    flavor?: string;
+    flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;
@@ -243,7 +247,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
-    flavor?: string;
+    flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
     quotedPrice?: number;

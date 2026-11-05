@@ -163,7 +163,11 @@ export default function App() {
         deliveryDate: orderData.deliveryDate || new Date().toISOString(),
         cakeType: orderData.cakeType || '',
         shape: orderData.shape || '',
-        flavor: orderData.flavor || '',
+        flavor: Array.isArray(orderData.flavor)
+          ? orderData.flavor
+          : typeof orderData.flavor === 'string' && orderData.flavor.trim()
+          ? [orderData.flavor.trim()]
+          : [],
         addons: orderData.addons || [],
         customRequirements: orderData.customRequirements || '',
         status: orderData.status || 'Pending',

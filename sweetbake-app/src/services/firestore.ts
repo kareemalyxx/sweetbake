@@ -233,8 +233,16 @@ export const FirestoreService = {
       }
     });
 
+    // Ensure flavor is always saved as an array of strings (do not write string again)
+    const normalizedFlavors = Array.isArray(order.flavor)
+      ? order.flavor.filter((f) => Boolean(f && typeof f === 'string' && f.trim()))
+      : typeof order.flavor === 'string' && order.flavor.trim()
+      ? [order.flavor.trim()]
+      : [];
+
     const dataToSave: Record<string, any> = {
       ...cleanedOrder,
+      flavor: normalizedFlavors,
       deliveryDate: toFirebaseTimestamp(order.deliveryDate),
       createdAt: toFirebaseTimestamp(order.createdAt),
       updatedAt: Timestamp.now(),
