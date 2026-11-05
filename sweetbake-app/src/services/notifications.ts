@@ -65,21 +65,30 @@ export const NotificationService = {
       minute: '2-digit',
     });
 
+    const isPickup = (order.fulfillmentType || '').toLowerCase() === 'pickup';
+    const pickupMapLink = 'https://maps.app.goo.gl/yALiMNtrgbG5EKgK6?g_st=ic';
+
     const lines = [
       `🎂 *Kake Order Update*`,
       `Hi ${order.customerName}! Here are the details for your custom cake commission:`,
       ``,
       `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${order.flavor || 'Custom'})`,
       `📅 *Schedule:* ${formattedDate}`,
-      `📍 *Fulfillment:* ${order.fulfillmentType || 'Pickup'}${order.location ? ` - ${order.location}` : ''}`,
     ];
 
+    if (isPickup) {
+      lines.push(`📍 *Fulfillment:* Pickup`);
+      lines.push(`🗺️ *Pickup Location:* ${pickupMapLink}`);
+    } else {
+      lines.push(`📍 *Fulfillment:* ${order.fulfillmentType || 'Delivery'}${order.location ? ` - ${order.location}` : ''}`);
+    }
+
     if (typeof order.quotedPrice === 'number' && order.quotedPrice > 0) {
-      const deliveryFee = typeof order.deliveryCost === 'number' && order.deliveryCost > 0 ? order.deliveryCost : 0;
+      const deliveryFee = !isPickup && typeof order.deliveryCost === 'number' && order.deliveryCost > 0 ? order.deliveryCost : 0;
       const totalOrderAmount = order.quotedPrice + deliveryFee;
 
       lines.push(`💰 *Cake Price:* $${order.quotedPrice.toFixed(2)}`);
-      if (deliveryFee > 0) {
+      if (!isPickup && deliveryFee > 0) {
         lines.push(`🚚 *Delivery Fee:* $${deliveryFee.toFixed(2)}`);
         lines.push(`💵 *Total (Cake + Delivery):* $${totalOrderAmount.toFixed(2)}`);
       }
