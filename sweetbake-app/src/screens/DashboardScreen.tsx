@@ -40,7 +40,11 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
 
   const filteredOrders = orders
     .filter((o) => {
-      const matchFilter = selectedFilter === 'All' || o.status === selectedFilter;
+      // Hide delivered / completed orders when browsing scheduled commissions unless specifically filtering for Delivered
+      const matchFilter = selectedFilter === 'All'
+        ? o.status !== 'Delivered'
+        : o.status === selectedFilter;
+
       const term = search.toLowerCase().trim();
       const matchSearch =
         !term ||
@@ -118,7 +122,9 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
           {(['All', 'Pending', 'Baking', 'Decorating', 'Delivered'] as const).map((status) => {
             const isSelected = selectedFilter === status;
             const count =
-              status === 'All' ? orders.length : orders.filter((o) => o.status === status).length;
+              status === 'All'
+                ? orders.filter((o) => o.status !== 'Delivered').length
+                : orders.filter((o) => o.status === status).length;
 
             return (
               <TouchableOpacity

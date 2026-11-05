@@ -98,7 +98,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           }}
           activeOpacity={0.7}
         >
-          <Ionicons name="copy-outline" size={15} color={Theme.colors.textDark} style={{ marginRight: 4 }} />
+          <Ionicons name="copy-outline" size={13} color={Theme.colors.textDark} style={{ marginRight: 3 }} />
           <Text style={styles.actionBtnText}>Copy</Text>
         </TouchableOpacity>
 
@@ -122,7 +122,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           }}
           activeOpacity={0.7}
         >
-          <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+          <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
           <Text style={[styles.actionBtnText, styles.actionBtnTextWhite]}>WhatsApp</Text>
         </TouchableOpacity>
 
@@ -147,7 +147,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           }}
           activeOpacity={0.7}
         >
-          <Ionicons name="logo-instagram" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+          <Ionicons name="logo-instagram" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
           <Text style={[styles.actionBtnText, styles.actionBtnTextWhite]}>Instagram</Text>
         </TouchableOpacity>
 
@@ -157,7 +157,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           onPress={onDelete}
           activeOpacity={0.7}
         >
-          <Ionicons name="trash-outline" size={15} color="#C62828" style={{ marginRight: 4 }} />
+          <Ionicons name="trash-outline" size={13} color="#C62828" style={{ marginRight: 3 }} />
           <Text style={[styles.actionBtnText, styles.deleteBtnText]}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -377,8 +377,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 10,
+    gap: 5,
+    marginBottom: 8,
   },
   actionBtn: {
     flex: 1,
@@ -386,9 +386,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: Theme.colors.cream,
-    paddingVertical: 7,
-    paddingHorizontal: 6,
-    borderRadius: 10,
+    paddingVertical: 5,
+    paddingHorizontal: 4,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: '#E8DED8',
   },
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     borderColor: '#FFCDD2',
   },
   actionBtnText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
     color: Theme.colors.textDark,
   },
