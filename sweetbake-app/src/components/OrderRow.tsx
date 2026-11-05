@@ -212,7 +212,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
           <View style={styles.prepGrid}>
             <View style={styles.prepItem}>
               <Text style={styles.prepLabel}>Type</Text>
-              <Text style={styles.prepValue}>{order.cakeType || 'Standard'}</Text>
+              <Text style={styles.prepValue}>{order.cakeType || 'Bento Box Cake'}</Text>
             </View>
 
             <View style={styles.prepItem}>
@@ -222,7 +222,7 @@ export const OrderRow: React.FC<OrderRowProps> = ({
 
             <View style={styles.prepItem}>
               <Text style={styles.prepLabel}>Flavor</Text>
-              <Text style={styles.prepValue}>{order.flavor || 'Vanilla'}</Text>
+              <Text style={styles.prepValue}>{order.flavor || 'Kinder'}</Text>
             </View>
 
             <View style={styles.prepItem}>

@@ -1,9 +1,9 @@
 export const CAKE_TYPES = [
+  'Bento Box Cake',
+  'Birthday Cake',
+  'Cupcake Platter',
   'Celebration Cake',
   'Tiered Wedding Cake',
-  'Bento Box Cake',
-  'Vintage Heart Cake',
-  'Cupcake Platter',
   'Number/Letter Cake',
 ];
 
@@ -11,19 +11,16 @@ export const CAKE_SHAPES = [
   'Round',
   'Heart',
   'Square',
-  'Hexagon',
   'Multi-tiered',
   'Sheet',
 ];
 
 export const CAKE_FLAVORS = [
-  'Vanilla Bean & Berry',
-  'Rich Belgian Chocolate',
-  'Red Velvet & Cream Cheese',
-  'Lemon Lavender Curd',
-  'Caramel Dulce de Leche',
-  'Pistachio Rosewater',
-  'Spiced Carrot Cake',
+  'Kinder',
+  'Matilda',
+  'Red Velvet',
+  'Tiramisu',
+  'Raspberry White Chocolate',
 ];
 
 export const CAKE_ADDONS = [

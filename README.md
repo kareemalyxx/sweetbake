@@ -27,9 +27,9 @@ Persistent entity representing custom commission orders:
 - `id`: `UUID`
 - `customerName`: `String`
 - `deliveryDate`: `Date`
-- `cakeType`: `String` (Celebration Cake, Tiered Wedding Cake, Bento Box Cake, Vintage Heart Cake, etc.)
-- `shape`: `String` (Round, Heart, Square, Hexagon, Multi-tiered, etc.)
-- `flavor`: `String` (Vanilla Bean & Berry, Lemon Lavender Curd, Pistachio Rosewater, etc.)
+- `cakeType`: `String` ( Birthday Cake, Bento Box Cake, Celebration Cake, Tiered Wedding Cake, etc.)
+- `shape`: `String` (Round, Heart, Square, Multi-tiered, etc.)
+- `flavor`: `String` ( Kinder, Matilda, Red velvet, Tiramisu, White Chocolate Raspberry, etc.)
 - `customRequirements`: `String` (Dietary notes, lettering, piping requirements)
 - `status`: `OrderStatus` enum (`Pending`, `Baking`, `Decorating`, `Delivered`)
 - `quotedPrice`: `Double`
