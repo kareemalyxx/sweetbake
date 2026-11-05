@@ -31,22 +31,29 @@ struct OrderEntryView: View {
     @State private var isProcessingPhotos: Bool = false
     
     private let cakeTypes = [
-        "Celebration Cake", "Tiered Wedding Cake", "Bento Box Cake",
-        "Vintage Heart Cake", "Cupcake Platter", "Number/Letter Cake"
+  "Bento Box Cake",
+  "Birthday Cake",
+  "Cupcake Platter",
+  "Celebration Cake",
+  "Tiered Wedding Cake",
+  "Number/Letter Cake",
     ]
     
     private let shapes = [
-        "Round", "Heart", "Square", "Hexagon", "Multi-tiered", "Sheet"
-    ]
+  "Round",
+  "Heart",
+  "Square",
+  "Multi-tiered",
+  "Sheet",
+      ]
     
     private let flavors = [
-        "Vanilla Bean & Berry",
-        "Rich Belgian Chocolate",
-        "Red Velvet & Cream Cheese",
-        "Lemon Lavender Curd",
-        "Caramel Dulce de Leche",
-        "Pistachio Rosewater",
-        "Spiced Carrot Cake"
+        "Kinder",
+        "Matilda",
+        "Red Velvet",
+        "Tiramisu",
+        "Raspberry White Chocolate",
+        "Lotus"
     ]
     
     var body: some View {
