@@ -157,12 +157,15 @@ export default function App() {
       targetOrderId = `ord-${Date.now()}`;
       const newOrder: CakeOrder = {
         id: targetOrderId,
+        customerId: orderData.customerId,
+        courierId: orderData.courierId,
         customerName: orderData.customerName || 'Anonymous',
         customerPhone: orderData.customerPhone,
         customerInstagram: orderData.customerInstagram,
         deliveryDate: orderData.deliveryDate || new Date().toISOString(),
         cakeType: orderData.cakeType || '',
         shape: orderData.shape || '',
+        cakeSize: orderData.cakeSize || 'M',
         flavor: Array.isArray(orderData.flavor)
           ? orderData.flavor
           : typeof orderData.flavor === 'string' && orderData.flavor.trim()
@@ -206,6 +209,62 @@ export default function App() {
               orderId: targetOrderId,
             }).catch(() => { });
           });
+        }
+
+        // Auto-save or update customer in Firestore /customers with last order linkage & total spent calculation
+        if (orderToSave.customerName && orderToSave.customerName.trim() && orderToSave.customerName.trim() !== 'Anonymous') {
+          const custName = orderToSave.customerName.trim();
+          FirestoreService.getCustomers().then((existingCusts) => {
+            const found = existingCusts.find(
+              (c) => c.name.toLowerCase() === custName.toLowerCase()
+            );
+            const orderCount = (found?.orderCount || 0) + (orderData.id ? 0 : 1);
+            // Calculate total spent by customer across all orders
+            const totalSpent = updatedOrders
+              .filter((o) => (o.customerName || '').trim().toLowerCase() === custName.toLowerCase())
+              .reduce((sum, o) => sum + (o.quotedPrice || 0), 0);
+
+            FirestoreService.saveCustomer({
+              id: found?.id,
+              name: custName,
+              phone: orderToSave.customerPhone || found?.phone,
+              instagram: orderToSave.customerInstagram || found?.instagram,
+              defaultLocation: orderToSave.location || found?.defaultLocation,
+              orderCount: Math.max(1, orderCount),
+              totalSpent,
+              lastOrderId: targetOrderId,
+              lastOrderDate: orderToSave.deliveryDate || new Date().toISOString(),
+            }).catch((err) => console.warn('Failed to auto-save repeated customer:', err));
+          }).catch(() => {});
+        }
+
+        // Auto-save or update courier in Firestore /deliveryCouriers with last delivery order linkage & total earned
+        if (orderToSave.fulfillmentType === 'Delivery' && orderToSave.deliveryPerson && orderToSave.deliveryPerson.trim()) {
+          const courierName = orderToSave.deliveryPerson.trim();
+          FirestoreService.getCouriers().then((existingCouriers) => {
+            const found = existingCouriers.find(
+              (c) => c.name.toLowerCase() === courierName.toLowerCase()
+            );
+            const deliveryCount = (found?.deliveryCount || 0) + (orderData.id ? 0 : 1);
+            // Calculate total delivery fees paid to this courier across all delivery orders
+            const totalEarned = updatedOrders
+              .filter(
+                (o) =>
+                  o.fulfillmentType === 'Delivery' &&
+                  (o.deliveryPerson || '').trim().toLowerCase() === courierName.toLowerCase()
+              )
+              .reduce((sum, o) => sum + (typeof o.deliveryCost === 'number' ? o.deliveryCost : 0), 0);
+
+            FirestoreService.saveCourier({
+              id: found?.id,
+              name: courierName,
+              phone: orderToSave.deliveryPhone || found?.phone,
+              deliveryCount: Math.max(1, deliveryCount),
+              totalEarned,
+              lastDeliveryOrderId: targetOrderId,
+              lastDeliveryDate: orderToSave.deliveryDate || new Date().toISOString(),
+            }).catch((err) => console.warn('Failed to auto-save delivery courier:', err));
+          }).catch(() => {});
         }
 
         // Manage Delivery Expense in /expenses:

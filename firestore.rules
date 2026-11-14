@@ -20,8 +20,11 @@ service cloud.firestore {
     // Document ID: Auto-generated or UUID string
     // Fields:
     //   - customerName: string (required, 1..150 chars)
+    //   - customerId: string (optional, 0..100 chars)
+    //   - courierId: string (optional, 0..100 chars)
     //   - deliveryDate: timestamp or string (required, valid timestamp or ISO-8601 string <= 50 chars)
     //   - cakeType: string (required, 1..100 chars)
+    //   - cakeSize: string (optional, <= 50 chars)
     //   - shape: string (required, 1..50 chars)
     //   - flavor: list of strings (1..20 items, array of flavors) or string (backward compatibility, 1..200 chars)
     //   - flavors: list of strings (optional, max 20 items)
@@ -64,6 +67,44 @@ service cloud.firestore {
     //   - createdAt: timestamp or string (required on create, immutable)
     //   - updatedAt: timestamp or string (optional)
     //   - userId: string (optional, 0..100 chars)
+    //
+    // Collection: /customers/{customerId}
+    // Document ID: Auto-generated or UUID string
+    // Fields:
+    //   - id: string (optional, 0..100 chars, immutable)
+    //   - name: string (required, 1..150 chars)
+    //   - phone: string (optional, 0..40 chars)
+    //   - instagram: string (optional, 0..60 chars)
+    //   - defaultLocation: string (optional, 0..300 chars)
+    //   - orderCount: number (optional, >= 0)
+    //   - totalSpent: number (optional, >= 0, <= 100000000)
+    //   - lastOrderId: string (optional, 0..100 chars)
+    //   - lastOrderDate: timestamp or string (optional, valid timestamp or ISO-8601 string)
+    //   - createdAt: timestamp or string (optional)
+    //   - updatedAt: timestamp or string (optional)
+    //
+    // Collection: /deliveryCouriers/{courierId}
+    // Document ID: Auto-generated or UUID string
+    // Fields:
+    //   - id: string (optional, 0..100 chars, immutable)
+    //   - name: string (required, 1..150 chars)
+    //   - phone: string (optional, 0..40 chars)
+    //   - deliveryCount: number (optional, >= 0)
+    //   - totalEarned: number (optional, >= 0, <= 100000000)
+    //   - lastDeliveryOrderId: string (optional, 0..100 chars)
+    //   - lastDeliveryDate: timestamp or string (optional, valid timestamp or ISO-8601 string)
+    //   - createdAt: timestamp or string (optional)
+    //   - updatedAt: timestamp or string (optional)
+    //
+    // Collection: /config/{configId}
+    // Document ID: Configuration key (e.g. 'bakeryOptions')
+    // Fields:
+    //   - cakeTypes: list of strings (optional, max 100 items)
+    //   - cakeShapes: list of strings (optional, max 100 items)
+    //   - cakeSizes: list of strings (optional, max 100 items)
+    //   - cakeFlavors: list of strings (optional, max 100 items)
+    //   - cakeAddons: list of strings (optional, max 100 items)
+    //   - updatedAt: timestamp or string (optional, valid timestamp or ISO-8601 string)
     //
     // ===============================================================
 
@@ -129,7 +170,7 @@ service cloud.firestore {
 
     function isValidOrder(data) {
       let allowed = [
-        'id', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'shape', 'flavor', 'flavors',
+        'id', 'customerId', 'courierId', 'customerName', 'customerPhone', 'customerInstagram', 'deliveryDate', 'cakeType', 'cakeSize', 'shape', 'flavor', 'flavors',
         'customRequirements', 'status', 'quotedPrice', 'downPayment',
         'remainingPayment', 'expenses', 'fulfillmentType', 'location',
         'deliveryCost', 'deliveryPerson', 'deliveryPhone', 'deliveryHandoverTime',
@@ -154,6 +195,9 @@ service cloud.firestore {
         (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&
         // Optional field validations
         (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('customerId' in data) || (data.customerId is string && data.customerId.size() <= 100)) &&
+        (!('courierId' in data) || (data.courierId is string && data.courierId.size() <= 100)) &&
+        (!('cakeSize' in data) || (data.cakeSize is string && data.cakeSize.size() <= 50)) &&
         (!('customRequirements' in data) || (data.customRequirements is string && data.customRequirements.size() <= 3000)) &&
         (!('downPayment' in data) || (data.downPayment is number && data.downPayment >= 0 && data.downPayment <= data.quotedPrice)) &&
         (!('remainingPayment' in data) || (data.remainingPayment is number && data.remainingPayment >= 0 && data.remainingPayment <= 1000000)) &&
@@ -219,6 +263,61 @@ service cloud.firestore {
     }
 
     // ===============================================================
+    // Domain Validators: Customers
+    // ===============================================================
+
+    function isValidCustomer(data) {
+      let allowed = ['id', 'name', 'phone', 'instagram', 'defaultLocation', 'orderCount', 'totalSpent', 'lastOrderId', 'lastOrderDate', 'createdAt', 'updatedAt'];
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['name']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+        (!('instagram' in data) || (data.instagram is string && data.instagram.size() <= 60)) &&
+        (!('defaultLocation' in data) || (data.defaultLocation is string && data.defaultLocation.size() <= 300)) &&
+        (!('orderCount' in data) || (data.orderCount is number && data.orderCount >= 0)) &&
+        (!('totalSpent' in data) || (data.totalSpent is number && data.totalSpent >= 0 && data.totalSpent <= 100000000)) &&
+        (!('lastOrderId' in data) || (data.lastOrderId is string && data.lastOrderId.size() <= 100)) &&
+        (!('lastOrderDate' in data) || isValidTimestampOrIsoDate(data.lastOrderDate)) &&
+        (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt));
+    }
+
+    // ===============================================================
+    // Domain Validators: Delivery Couriers
+    // ===============================================================
+
+    function isValidCourier(data) {
+      let allowed = ['id', 'name', 'phone', 'deliveryCount', 'totalEarned', 'lastDeliveryOrderId', 'lastDeliveryDate', 'createdAt', 'updatedAt'];
+      return hasOnlyAllowedFields(allowed) &&
+        hasRequiredFields(['name']) &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 150 &&
+        (!('id' in data) || (data.id is string && data.id.size() <= 100)) &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 40)) &&
+        (!('deliveryCount' in data) || (data.deliveryCount is number && data.deliveryCount >= 0)) &&
+        (!('totalEarned' in data) || (data.totalEarned is number && data.totalEarned >= 0 && data.totalEarned <= 100000000)) &&
+        (!('lastDeliveryOrderId' in data) || (data.lastDeliveryOrderId is string && data.lastDeliveryOrderId.size() <= 100)) &&
+        (!('lastDeliveryDate' in data) || isValidTimestampOrIsoDate(data.lastDeliveryDate)) &&
+        (!('createdAt' in data) || isValidTimestampOrIsoDate(data.createdAt)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt));
+    }
+
+    // ===============================================================
+    // Domain Validators: Remote Bakery Configuration
+    // ===============================================================
+
+    function isValidConfig(data) {
+      let allowed = ['cakeTypes', 'cakeShapes', 'cakeSizes', 'cakeFlavors', 'cakeAddons', 'updatedAt'];
+      return hasOnlyAllowedFields(allowed) &&
+        (!('cakeTypes' in data) || (data.cakeTypes is list && data.cakeTypes.size() <= 100)) &&
+        (!('cakeShapes' in data) || (data.cakeShapes is list && data.cakeShapes.size() <= 100)) &&
+        (!('cakeSizes' in data) || (data.cakeSizes is list && data.cakeSizes.size() <= 100)) &&
+        (!('cakeFlavors' in data) || (data.cakeFlavors is list && data.cakeFlavors.size() <= 100)) &&
+        (!('cakeAddons' in data) || (data.cakeAddons is list && data.cakeAddons.size() <= 100)) &&
+        (!('updatedAt' in data) || isValidTimestampOrIsoDate(data.updatedAt));
+    }
+
+    // ===============================================================
     // Security Rules Match Blocks (Single Bakery Kitchen Architecture)
     // Direct root collections: /orders, /requirements, and /expenses
     // ===============================================================
@@ -250,6 +349,32 @@ service cloud.firestore {
       allow delete: if true;
     }
 
+    // Root-level customers collection for the bakery
+    match /customers/{customerId} {
+      allow read: if true;
+      allow create: if isValidCustomer(request.resource.data);
+      allow update: if isValidCustomer(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id']);
+      allow delete: if true;
+    }
+
+    // Root-level deliveryCouriers collection for the bakery
+    match /deliveryCouriers/{courierId} {
+      allow read: if true;
+      allow create: if isValidCourier(request.resource.data);
+      allow update: if isValidCourier(request.resource.data) &&
+        areImmutableFieldsUnchanged(['id']);
+      allow delete: if true;
+    }
+
+    // Root-level remote bakery options / config collection
+    match /config/{configId} {
+      allow read: if true;
+      allow create: if isValidConfig(request.resource.data);
+      allow update: if isValidConfig(request.resource.data);
+      allow delete: if true;
+    }
+
     // Optional user profile support (for staff profile settings or scoped data if needed)
     match /users/{userId} {
       allow read: if isOwner(userId);
@@ -273,4 +398,3 @@ service cloud.firestore {
     }
   }
 }
-

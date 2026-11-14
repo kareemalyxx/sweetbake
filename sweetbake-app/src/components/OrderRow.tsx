@@ -227,6 +227,11 @@ export const OrderRow: React.FC<OrderRowProps> = ({
             </View>
 
             <View style={styles.prepItem}>
+              <Text style={styles.prepLabel}>Size</Text>
+              <Text style={styles.prepValue}>{order.cakeSize || 'M'}</Text>
+            </View>
+
+            <View style={styles.prepItem}>
               <Text style={styles.prepLabel}>Flavor</Text>
               <Text style={styles.prepValue}>
                 {Array.isArray(order.flavor)

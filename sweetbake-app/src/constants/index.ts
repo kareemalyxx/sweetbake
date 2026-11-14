@@ -15,6 +15,12 @@ export const CAKE_SHAPES = [
   'Sheet',
 ];
 
+export const CAKE_SIZES = [
+  'M',
+  'L',
+  'XL',
+];
+
 export const CAKE_FLAVORS = [
   'Kinder',
   'Matilda',

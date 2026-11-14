@@ -20,6 +20,7 @@ struct OrderEntryView: View {
     @State private var deliveryDate: Date = Calendar.current.date(byAdding: .day, value: 3, to: Date()) ?? Date()
     @State private var cakeType: String = "Celebration Cake"
     @State private var shape: String = "Round"
+    @State private var cakeSize: String = "M"
     @State private var flavor: String = "Vanilla Bean & Berry"
     @State private var customRequirements: String = ""
     @State private var status: OrderStatus = .pending
@@ -46,6 +47,12 @@ struct OrderEntryView: View {
   "Multi-tiered",
   "Sheet",
       ]
+    
+    private let sizes = [
+        "M",
+        "L",
+        "XL"
+    ]
     
     private let flavors = [
         "Kinder",
@@ -108,6 +115,14 @@ struct OrderEntryView: View {
                         }
                     }
                     .font(.body)
+                    
+                    Picker("Size", selection: $cakeSize) {
+                        ForEach(sizes, id: \.self) { s in
+                            Text(s).tag(s)
+                        }
+                    }
+                    .font(.body)
+                    .pickerStyle(.segmented)
                     
                     Picker("Flavor & Filling", selection: $flavor) {
                         ForEach(flavors, id: \.self) { item in
@@ -285,6 +300,7 @@ struct OrderEntryView: View {
         deliveryDate = order.deliveryDate
         cakeType = order.cakeType
         shape = order.shape
+        cakeSize = order.cakeSize
         flavor = order.flavor
         customRequirements = order.customRequirements
         status = order.status
@@ -322,6 +338,7 @@ struct OrderEntryView: View {
             order.deliveryDate = deliveryDate
             order.cakeType = cakeType
             order.shape = shape
+            order.cakeSize = cakeSize
             order.flavor = flavor
             order.customRequirements = customRequirements
             order.status = status
@@ -333,6 +350,7 @@ struct OrderEntryView: View {
                 deliveryDate: deliveryDate,
                 cakeType: cakeType,
                 shape: shape,
+                cakeSize: cakeSize,
                 flavor: flavor,
                 customRequirements: customRequirements,
                 status: status,

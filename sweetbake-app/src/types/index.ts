@@ -15,12 +15,15 @@ export interface OrderExpense {
 
 export interface CakeOrder {
   id: string;
+  customerId?: string; // Foreign key referencing SavedCustomer
+  courierId?: string; // Foreign key referencing SavedCourier
   customerName: string;
   customerPhone?: string; // Client phone number for WhatsApp reminders & updates
   customerInstagram?: string; // Client Instagram username or handle (e.g. @username or username)
   deliveryDate: string; // ISO String
   cakeType: string;
   shape: string;
+  cakeSize?: string; // Cake size: M, L, XL or custom
   flavor: string | string[]; // Array of flavors (also accepts legacy string on read)
   addons?: string[]; // Multiselection for custom addons (completion tracked in requirements)
   customRequirements: string;
@@ -54,3 +57,39 @@ export interface GeneralRequirement {
   expenseDate?: string; // ISO string when the expense occurred
   createdAt: string;
 }
+
+export interface SavedCustomer {
+  id: string;
+  name: string;
+  phone?: string;
+  instagram?: string;
+  defaultLocation?: string;
+  orderCount?: number;
+  totalSpent?: number; // Total amount paid across all orders
+  lastOrderId?: string;
+  lastOrderDate?: string; // ISO string
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface SavedCourier {
+  id: string;
+  name: string;
+  phone?: string;
+  deliveryCount?: number;
+  totalEarned?: number; // Total delivery fees paid across all orders
+  lastDeliveryOrderId?: string;
+  lastDeliveryDate?: string; // ISO string
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BakeryConfig {
+  cakeTypes?: string[];
+  cakeShapes?: string[];
+  cakeSizes?: string[];
+  cakeFlavors?: string[];
+  cakeAddons?: string[];
+  updatedAt?: string;
+}
+

@@ -40,6 +40,7 @@ final class Order {
     var deliveryDate: Date = Date()
     var cakeType: String = ""
     var shape: String = ""
+    var cakeSize: String = "M"
     var flavor: String = ""
     var customRequirements: String = ""
     var statusRaw: String = OrderStatus.pending.rawValue
@@ -57,6 +58,7 @@ final class Order {
         deliveryDate: Date,
         cakeType: String,
         shape: String,
+        cakeSize: String = "M",
         flavor: String,
         customRequirements: String = "",
         status: OrderStatus = .pending,
@@ -68,6 +70,7 @@ final class Order {
         self.deliveryDate = deliveryDate
         self.cakeType = cakeType
         self.shape = shape
+        self.cakeSize = cakeSize
         self.flavor = flavor
         self.customRequirements = customRequirements
         self.statusRaw = status.rawValue

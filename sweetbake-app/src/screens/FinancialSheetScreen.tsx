@@ -22,11 +22,11 @@ interface FinancialSheetScreenProps {
 }
 
 type PeriodType = 'Monthly' | 'Weekly';
-type FilterType = 'All' | 'Income' | 'Expenses';
+type FilterType = 'All' | 'Income' | 'Expenses' | 'Delivery';
 
 interface FlattenedTransaction {
   id: string;
-  type: 'Income' | 'Expense';
+  type: 'Income' | 'Expense' | 'Delivery';
   date: Date;
   dateStr: string;
   amount: number;
@@ -114,15 +114,16 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
         o.expenses.forEach((exp: OrderExpense) => {
           const expDate = new Date(exp.date || o.createdAt);
           if (expDate >= periodRange.start && expDate <= periodRange.end) {
+            const isDelivery = exp.id.startsWith('exp-deliv-') || (exp.notes && exp.notes.toLowerCase().includes('delivery fee'));
             list.push({
               id: `exp-${exp.id}`,
-              type: 'Expense',
+              type: isDelivery ? 'Delivery' : 'Expense',
               date: expDate,
               dateStr: expDate.toISOString(),
               amount: exp.amount || 0,
-              title: exp.notes || 'Order Supplies',
+              title: exp.notes || (isDelivery ? 'Delivery Fee' : 'Order Supplies'),
               subtitle: `For order: ${o.customerName} (${o.cakeType})`,
-              badgeText: 'Supply Expense',
+              badgeText: isDelivery ? 'Delivery Courier' : 'Supply Expense',
               orderId: o.id,
             });
           }
@@ -138,17 +139,18 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
         const alreadyAdded = list.some((t) => t.id === `exp-${exp.id}` || t.id === exp.id);
         if (!alreadyAdded) {
           const linkedOrder = exp.orderId ? orders.find((o) => o.id === exp.orderId) : undefined;
+          const isDelivery = exp.id.startsWith('exp-deliv-') || (exp.notes && exp.notes.toLowerCase().includes('delivery fee'));
           list.push({
             id: `exp-${exp.id}`,
-            type: 'Expense',
+            type: isDelivery ? 'Delivery' : 'Expense',
             date: expDate,
             dateStr: expDate.toISOString(),
             amount: exp.amount || 0,
-            title: exp.notes || 'Bakery Expense',
+            title: exp.notes || (isDelivery ? 'Delivery Fee' : 'Bakery Expense'),
             subtitle: linkedOrder
               ? `For order: ${linkedOrder.customerName} (${linkedOrder.cakeType})`
               : (exp.orderId ? `Order #${exp.orderId.slice(-6)}` : 'General Bakery Supplies'),
-            badgeText: exp.orderId ? 'Order Expense' : 'General Expense',
+            badgeText: isDelivery ? 'Delivery Courier' : (exp.orderId ? 'Order Expense' : 'General Expense'),
             orderId: exp.orderId || 'general',
           });
         }
@@ -194,8 +196,14 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
       .filter((t) => t.type === 'Income')
       .reduce((sum, t) => sum + t.amount, 0);
 
+    // Regular bakery / supplies / checklist expenses (excluding delivery)
     const totalExpenses = transactions
       .filter((t) => t.type === 'Expense')
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    // Dedicated Delivery courier fees
+    const totalDelivery = transactions
+      .filter((t) => t.type === 'Delivery')
       .reduce((sum, t) => sum + t.amount, 0);
 
     // Pending Income (Unpaid remaining balance on active orders in this period)
@@ -227,16 +235,18 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
         return sum + (o.downPayment || 0);
       }, 0);
 
+    // Net Bakery / Cake Profit strictly excludes delivery (Cake Income - Bakery Supplies Expenses)
     const netProfit = totalIncome - totalExpenses;
     const profitMargin = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
 
-    return { totalIncome, totalExpenses, pendingBalance, receivedIncome, netProfit, profitMargin };
+    return { totalIncome, totalExpenses, totalDelivery, pendingBalance, receivedIncome, netProfit, profitMargin };
   }, [transactions, orders, periodRange]);
 
   // Filtered transactions for the list
   const filteredList = useMemo(() => {
     if (filterType === 'All') return transactions;
     if (filterType === 'Expenses') return transactions.filter((t) => t.type === 'Expense');
+    if (filterType === 'Delivery') return transactions.filter((t) => t.type === 'Delivery');
     return transactions.filter((t) => t.type === filterType);
   }, [transactions, filterType]);
 
@@ -310,21 +320,23 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
 
       {/* Summary KPI Cards Grid */}
       <View style={styles.kpiContainer}>
+        {/* Row 1: Total Income & Net Profit */}
         <View style={styles.kpiRow}>
-          {/* Total Income */}
+          {/* Total Cake Income */}
           <View style={[styles.kpiCard, { borderLeftColor: '#2E7D32' }]}>
             <View style={styles.kpiHeader}>
               <View style={[styles.kpiIconBox, { backgroundColor: '#E8F5E9' }]}>
                 <Ionicons name="arrow-down-circle" size={16} color="#2E7D32" />
               </View>
-              <Text style={styles.kpiLabel}>Total Income</Text>
+              <Text style={styles.kpiLabel}>Cake Income</Text>
             </View>
             <Text style={[styles.kpiValue, { color: '#2E7D32' }]}>
               +${totals.totalIncome.toFixed(2)}
             </Text>
+            <Text style={styles.kpiSubCaption}>Pure cake sales</Text>
           </View>
 
-          {/* Total Expenses */}
+          {/* Bakery Supplies / General Expenses */}
           <View style={[styles.kpiCard, { borderLeftColor: '#C62828' }]}>
             <View style={styles.kpiHeader}>
               <View style={[styles.kpiIconBox, { backgroundColor: '#FFEBEE' }]}>
@@ -335,11 +347,26 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
             <Text style={[styles.kpiValue, { color: '#C62828' }]}>
               -${totals.totalExpenses.toFixed(2)}
             </Text>
+            <Text style={styles.kpiSubCaption}>Ingredients & Supplies</Text>
           </View>
         </View>
 
-        {/* Second KPI Row: Pending Balance Due & Received Income */}
+        {/* Row 2: Dedicated Delivery Box & Collected Income */}
         <View style={[styles.kpiRow, { marginTop: 8 }]}>
+          {/* Dedicated Delivery Courier Fees Box */}
+          <View style={[styles.kpiCard, { borderLeftColor: '#E65100' }]}>
+            <View style={styles.kpiHeader}>
+              <View style={[styles.kpiIconBox, { backgroundColor: '#FFF3E0' }]}>
+                <Ionicons name="bicycle" size={16} color="#E65100" />
+              </View>
+              <Text style={styles.kpiLabel}>Delivery</Text>
+            </View>
+            <Text style={[styles.kpiValue, { color: '#E65100' }]}>
+              -${totals.totalDelivery.toFixed(2)}
+            </Text>
+            <Text style={styles.kpiSubCaption}>Courier & Driver fees</Text>
+          </View>
+
           {/* Pending Balance Due */}
           <View style={[styles.kpiCard, { borderLeftColor: '#D97706' }]}>
             <View style={styles.kpiHeader}>
@@ -352,20 +379,6 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
               ${totals.pendingBalance.toFixed(2)}
             </Text>
             <Text style={styles.kpiSubCaption}>Unpaid remaining due</Text>
-          </View>
-
-          {/* Received / Collected Income */}
-          <View style={[styles.kpiCard, { borderLeftColor: '#059669' }]}>
-            <View style={styles.kpiHeader}>
-              <View style={[styles.kpiIconBox, { backgroundColor: '#D1FAE5' }]}>
-                <Ionicons name="checkmark-done-circle-outline" size={16} color="#059669" />
-              </View>
-              <Text style={styles.kpiLabel}>Collected</Text>
-            </View>
-            <Text style={[styles.kpiValue, { color: '#059669' }]}>
-              ${totals.receivedIncome.toFixed(2)}
-            </Text>
-            <Text style={styles.kpiSubCaption}>Paid in advance & full</Text>
           </View>
         </View>
 
@@ -382,9 +395,9 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
               style={{ marginRight: 8 }}
             />
             <View>
-              <Text style={styles.netProfitLabel}>Net Calculated Profit</Text>
+              <Text style={styles.netProfitLabel}>Net Cake Profit (Excluding Delivery)</Text>
               <Text style={styles.netProfitSubtitle}>
-                Margin: {totals.profitMargin}% • {transactions.length} transactions
+                Margin: {totals.profitMargin}% • Cake Income minus Baking Expenses
               </Text>
             </View>
           </View>
@@ -397,7 +410,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
         </View>
       </View>
 
-      {/* Filter Chips: All, Income, Expenses */}
+      {/* Filter Chips: All, Income, Expenses, Delivery */}
       <View style={styles.filterRow}>
         <TouchableOpacity
           style={[styles.filterChip, filterType === 'All' && styles.filterChipActive]}
@@ -436,6 +449,19 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
             Expenses ({transactions.filter((t) => t.type === 'Expense').length})
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.filterChip, filterType === 'Delivery' && styles.filterChipActiveDelivery]}
+          onPress={() => {
+            triggerHaptic.selection();
+            setFilterType('Delivery');
+          }}
+        >
+          <Ionicons name="bicycle" size={12} color={filterType === 'Delivery' ? '#E65100' : Theme.colors.textSecondary} style={{ marginRight: 4 }} />
+          <Text style={[styles.filterChipText, filterType === 'Delivery' && styles.filterChipTextActiveDelivery]}>
+            Delivery ({transactions.filter((t) => t.type === 'Delivery').length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Detailed Ledger Transaction List */}
@@ -455,23 +481,28 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
         }
         renderItem={({ item }) => {
           const isIncome = item.type === 'Income';
+          const isDelivery = item.type === 'Delivery';
           const formattedDate = item.date.toLocaleDateString(undefined, {
             weekday: 'short',
             month: 'short',
             day: 'numeric',
           });
 
+          const iconColor = isIncome ? '#2E7D32' : isDelivery ? '#E65100' : '#C62828';
+          const iconBg = isIncome ? '#E8F5E9' : isDelivery ? '#FFF3E0' : '#FFEBEE';
+          const iconName = isIncome ? 'arrow-down' : isDelivery ? 'bicycle' : 'arrow-up';
+
           return (
             <View style={styles.txRow}>
               {/* Type Icon */}
               <View style={[
                 styles.txIconBox,
-                { backgroundColor: isIncome ? '#E8F5E9' : '#FFEBEE' },
+                { backgroundColor: iconBg },
               ]}>
                 <Ionicons
-                  name={isIncome ? 'arrow-down' : 'arrow-up'}
+                  name={iconName}
                   size={14}
-                  color={isIncome ? '#2E7D32' : '#C62828'}
+                  color={iconColor}
                 />
               </View>
 
@@ -483,7 +514,7 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
                   </Text>
                   <Text style={[
                     styles.txAmount,
-                    { color: isIncome ? '#2E7D32' : '#C62828' },
+                    { color: isIncome ? '#2E7D32' : isDelivery ? '#E65100' : '#C62828' },
                   ]}>
                     {isIncome ? '+' : '-'}${item.amount.toFixed(2)}
                   </Text>
@@ -500,11 +531,11 @@ export const FinancialSheetScreen: React.FC<FinancialSheetScreenProps> = ({
                   <View style={styles.txBadgeRow}>
                     <View style={[
                       styles.txBadge,
-                      { backgroundColor: isIncome ? '#F1F8E9' : '#FFF0F2' },
+                      { backgroundColor: isIncome ? '#F1F8E9' : isDelivery ? '#FFF3E0' : '#FFF0F2' },
                     ]}>
                       <Text style={[
                         styles.txBadgeText,
-                        { color: isIncome ? '#2E7D32' : Theme.colors.deepRose },
+                        { color: isIncome ? '#2E7D32' : isDelivery ? '#E65100' : Theme.colors.deepRose },
                       ]}>
                         {item.badgeText}
                       </Text>
@@ -731,6 +762,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFEBEE',
     borderColor: '#C62828',
   },
+  filterChipActiveDelivery: {
+    backgroundColor: '#FFF3E0',
+    borderColor: '#E65100',
+  },
   filterChipText: {
     fontSize: 11,
     fontWeight: '700',
@@ -744,6 +779,9 @@ const styles = StyleSheet.create({
   },
   filterChipTextActiveExpense: {
     color: '#C62828',
+  },
+  filterChipTextActiveDelivery: {
+    color: '#E65100',
   },
   listContent: {
     paddingHorizontal: 16,

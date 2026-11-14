@@ -91,6 +91,7 @@ struct OrderDetailView: View {
                     
                     DetailRow(title: "Cake Type", value: order.cakeType, icon: "birthday.cake")
                     DetailRow(title: "Shape", value: order.shape, icon: "square.on.circle")
+                    DetailRow(title: "Size", value: order.cakeSize, icon: "ruler")
                     DetailRow(title: "Flavor & Filling", value: order.flavor, icon: "heart.circle")
                 }
                 .padding(16)

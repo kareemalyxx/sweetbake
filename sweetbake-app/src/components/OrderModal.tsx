@@ -16,11 +16,12 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
-import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming, OrderExpense } from '../types';
+import { CakeOrder, OrderStatus, FulfillmentType, ReminderTiming, OrderExpense, SavedCustomer, SavedCourier } from '../types';
 import { Theme } from '../theme';
-import { CAKE_TYPES, CAKE_SHAPES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
+import { CAKE_TYPES, CAKE_SHAPES, CAKE_SIZES, CAKE_FLAVORS, CAKE_ADDONS } from '../constants';
 import { COUNTRY_CODES, parsePhoneCountry, CountryCodeItem } from '../constants/countryCodes';
 import { StorageService } from '../services/storage';
+import { FirestoreService } from '../services/firestore';
 import { NotificationService } from '../services/notifications';
 import { triggerHaptic } from '../services/haptics';
 
@@ -48,8 +49,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   onSave,
 }) => {
   const [customerName, setCustomerName] = useState('');
+  const [customerId, setCustomerId] = useState<string | undefined>(undefined);
+  const [courierId, setCourierId] = useState<string | undefined>(undefined);
   const [cakeType, setCakeType] = useState(CAKE_TYPES[0]);
   const [shape, setShape] = useState(CAKE_SHAPES[0]);
+  const [cakeSize, setCakeSize] = useState(CAKE_SIZES[0]);
   const [selectedFlavors, setSelectedFlavors] = useState<string[]>([CAKE_FLAVORS[0]]);
   const [selectedAddons, setSelectedAddons] = useState<string[]>([]);
   const [status, setStatus] = useState<OrderStatus>('Pending');
@@ -102,6 +106,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [availableFlavors, setAvailableFlavors] = useState<string[]>(CAKE_FLAVORS);
   const [availableCakeTypes, setAvailableCakeTypes] = useState<string[]>(CAKE_TYPES);
   const [availableShapes, setAvailableShapes] = useState<string[]>(CAKE_SHAPES);
+  const [availableSizes, setAvailableSizes] = useState<string[]>(CAKE_SIZES);
   const [availableAddons, setAvailableAddons] = useState<string[]>(CAKE_ADDONS);
 
   // Client Phone Number (for WhatsApp notification) & Instagram
@@ -121,32 +126,94 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [newShapeInput, setNewShapeInput] = useState('');
   const [showAddShape, setShowAddShape] = useState(false);
 
+  const [newSizeInput, setNewSizeInput] = useState('');
+  const [showAddSize, setShowAddSize] = useState(false);
+
   const [newAddonInput, setNewAddonInput] = useState('');
   const [showAddAddon, setShowAddAddon] = useState(false);
 
+  // Repeated Customers & Couriers (Firestore & Local)
+  const [savedCustomers, setSavedCustomers] = useState<SavedCustomer[]>([]);
+  const [savedCouriers, setSavedCouriers] = useState<SavedCourier[]>([]);
+  const [showCustomerPicker, setShowCustomerPicker] = useState(false);
+  const [showCourierPicker, setShowCourierPicker] = useState(false);
+
   // Rename modal states
   const [renameTarget, setRenameTarget] = useState<{
-    category: 'Type' | 'Shape' | 'Flavor' | 'Add-on';
+    category: 'Type' | 'Shape' | 'Size' | 'Flavor' | 'Add-on';
     oldValue: string;
   } | null>(null);
   const [renameInputValue, setRenameInputValue] = useState('');
 
   useEffect(() => {
     const loadDynamicOptions = async () => {
-      const storedFlavors = await StorageService.getFlavors(CAKE_FLAVORS);
-      const storedTypes = await StorageService.getCakeTypes(CAKE_TYPES);
-      const storedShapes = await StorageService.getCakeShapes(CAKE_SHAPES);
-      const storedAddons = await StorageService.getCakeAddons(CAKE_ADDONS);
+      // First try to load remote config from Firestore
+      let remoteConfig: any = null;
+      try {
+        remoteConfig = await FirestoreService.getBakeryConfig();
+      } catch (err) {
+        console.warn('Could not fetch remote bakery config:', err);
+      }
+
+      const storedFlavors = (remoteConfig?.cakeFlavors && remoteConfig.cakeFlavors.length > 0)
+        ? remoteConfig.cakeFlavors
+        : await StorageService.getFlavors(CAKE_FLAVORS);
+
+      const storedTypes = (remoteConfig?.cakeTypes && remoteConfig.cakeTypes.length > 0)
+        ? remoteConfig.cakeTypes
+        : await StorageService.getCakeTypes(CAKE_TYPES);
+
+      const storedShapes = (remoteConfig?.cakeShapes && remoteConfig.cakeShapes.length > 0)
+        ? remoteConfig.cakeShapes
+        : await StorageService.getCakeShapes(CAKE_SHAPES);
+
+      const storedSizes = (remoteConfig?.cakeSizes && remoteConfig.cakeSizes.length > 0)
+        ? remoteConfig.cakeSizes
+        : await StorageService.getCakeSizes(CAKE_SIZES);
+
+      const storedAddons = (remoteConfig?.cakeAddons && remoteConfig.cakeAddons.length > 0)
+        ? remoteConfig.cakeAddons
+        : await StorageService.getCakeAddons(CAKE_ADDONS);
+
       setAvailableFlavors(storedFlavors);
       setAvailableCakeTypes(storedTypes);
       setAvailableShapes(storedShapes);
+      setAvailableSizes(storedSizes);
       setAvailableAddons(storedAddons);
+
+      // Keep local storage synchronized with latest remote data if available
+      if (remoteConfig) {
+        if (remoteConfig.cakeFlavors) StorageService.saveFlavors(remoteConfig.cakeFlavors);
+        if (remoteConfig.cakeTypes) StorageService.saveCakeTypes(remoteConfig.cakeTypes);
+        if (remoteConfig.cakeShapes) StorageService.saveCakeShapes(remoteConfig.cakeShapes);
+        if (remoteConfig.cakeSizes) StorageService.saveCakeSizes(remoteConfig.cakeSizes);
+        if (remoteConfig.cakeAddons) StorageService.saveCakeAddons(remoteConfig.cakeAddons);
+      }
+
+      // Load saved customers and couriers
+      try {
+        const custs = await FirestoreService.getCustomers();
+        setSavedCustomers(custs);
+      } catch {
+        const cached = await StorageService.getCustomers();
+        setSavedCustomers(cached);
+      }
+
+      try {
+        const couriers = await FirestoreService.getCouriers();
+        setSavedCouriers(couriers);
+      } catch {
+        const cached = await StorageService.getCouriers();
+        setSavedCouriers(cached);
+      }
     };
     loadDynamicOptions();
   }, []);
 
   useEffect(() => {
     if (orderToEdit) {
+      setCustomerId(orderToEdit.customerId);
+      setCourierId(orderToEdit.courierId);
       setCustomerName(orderToEdit.customerName);
       setCustomerInstagram(orderToEdit.customerInstagram || '');
       const parsed = parsePhoneCountry(orderToEdit.customerPhone);
@@ -154,6 +221,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setCustomerPhone(parsed.nationalNumber);
       setCakeType(orderToEdit.cakeType);
       setShape(orderToEdit.shape);
+      setCakeSize(orderToEdit.cakeSize || availableSizes[0] || CAKE_SIZES[0]);
       // Support reading string or array of flavors
       if (Array.isArray(orderToEdit.flavor)) {
         setSelectedFlavors(orderToEdit.flavor.length > 0 ? orderToEdit.flavor : [CAKE_FLAVORS[0]]);
@@ -195,11 +263,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       setReferenceImages(orderToEdit.referenceImages || []);
       setDeliveryDate(new Date(orderToEdit.deliveryDate));
     } else {
+      setCustomerId(undefined);
+      setCourierId(undefined);
       setCustomerName('');
       setCustomerPhone('');
       setCustomerInstagram('');
       setCakeType(availableCakeTypes[0] || CAKE_TYPES[0]);
       setShape(availableShapes[0] || CAKE_SHAPES[0]);
+      setCakeSize(availableSizes[0] || CAKE_SIZES[0]);
       setSelectedFlavors([availableFlavors[0] || CAKE_FLAVORS[0]]);
       setStatus('Pending');
       setSelectedAddons([]);
@@ -366,6 +437,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setNewFlavorInput('');
     setShowAddFlavor(false);
     await StorageService.saveFlavors(updated);
+    FirestoreService.saveBakeryConfig({ cakeFlavors: updated }).catch(() => {});
   };
 
   const toggleFlavor = (f: string) => {
@@ -396,6 +468,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setNewTypeInput('');
     setShowAddType(false);
     await StorageService.saveCakeTypes(updated);
+    FirestoreService.saveBakeryConfig({ cakeTypes: updated }).catch(() => {});
   };
 
   const handleAddNewShape = async () => {
@@ -414,6 +487,26 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setNewShapeInput('');
     setShowAddShape(false);
     await StorageService.saveCakeShapes(updated);
+    FirestoreService.saveBakeryConfig({ cakeShapes: updated }).catch(() => {});
+  };
+
+  const handleAddNewSize = async () => {
+    const trimmed = newSizeInput.trim();
+    if (!trimmed) return;
+    if (availableSizes.includes(trimmed)) {
+      setCakeSize(trimmed);
+      setNewSizeInput('');
+      setShowAddSize(false);
+      return;
+    }
+    triggerHaptic.success();
+    const updated = [...availableSizes, trimmed];
+    setAvailableSizes(updated);
+    setCakeSize(trimmed);
+    setNewSizeInput('');
+    setShowAddSize(false);
+    await StorageService.saveCakeSizes(updated);
+    FirestoreService.saveBakeryConfig({ cakeSizes: updated }).catch(() => {});
   };
 
   const handleAddNewAddon = async () => {
@@ -434,6 +527,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setNewAddonInput('');
     setShowAddAddon(false);
     await StorageService.saveCakeAddons(updated);
+    FirestoreService.saveBakeryConfig({ cakeAddons: updated }).catch(() => {});
   };
 
   const toggleAddon = (addon: string) => {
@@ -445,8 +539,36 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     }
   };
 
+  const handleSelectCustomer = (cust: SavedCustomer) => {
+    triggerHaptic.selection();
+    setCustomerId(cust.id);
+    setCustomerName(cust.name);
+    if (cust.phone) {
+      const parsed = parsePhoneCountry(cust.phone);
+      setCustomerDialCode(parsed.dialCode);
+      setCustomerPhone(parsed.nationalNumber);
+    }
+    if (cust.instagram) {
+      setCustomerInstagram(cust.instagram);
+    }
+    if (cust.defaultLocation && !location) {
+      setLocation(cust.defaultLocation);
+    }
+    setShowCustomerPicker(false);
+  };
+
+  const handleSelectCourier = (courier: SavedCourier) => {
+    triggerHaptic.selection();
+    setCourierId(courier.id);
+    setDeliveryPerson(courier.name);
+    if (courier.phone) {
+      setDeliveryPhone(courier.phone);
+    }
+    setShowCourierPicker(false);
+  };
+
   // Open Rename dialog on long press
-  const openRenameModal = (category: 'Type' | 'Shape' | 'Flavor' | 'Add-on', value: string) => {
+  const openRenameModal = (category: 'Type' | 'Shape' | 'Size' | 'Flavor' | 'Add-on', value: string) => {
     triggerHaptic.heavy();
     setRenameTarget({ category, oldValue: value });
     setRenameInputValue(value);
@@ -471,16 +593,25 @@ export const OrderModal: React.FC<OrderModalProps> = ({
         setSelectedFlavors(selectedFlavors.map((f) => (f === oldValue ? newVal : f)));
       }
       await StorageService.saveFlavors(updated);
+      FirestoreService.saveBakeryConfig({ cakeFlavors: updated }).catch(() => {});
     } else if (category === 'Type') {
       const updated = availableCakeTypes.map((t) => (t === oldValue ? newVal : t));
       setAvailableCakeTypes(updated);
       if (cakeType === oldValue) setCakeType(newVal);
       await StorageService.saveCakeTypes(updated);
+      FirestoreService.saveBakeryConfig({ cakeTypes: updated }).catch(() => {});
     } else if (category === 'Shape') {
       const updated = availableShapes.map((s) => (s === oldValue ? newVal : s));
       setAvailableShapes(updated);
       if (shape === oldValue) setShape(newVal);
       await StorageService.saveCakeShapes(updated);
+      FirestoreService.saveBakeryConfig({ cakeShapes: updated }).catch(() => {});
+    } else if (category === 'Size') {
+      const updated = availableSizes.map((sz) => (sz === oldValue ? newVal : sz));
+      setAvailableSizes(updated);
+      if (cakeSize === oldValue) setCakeSize(newVal);
+      await StorageService.saveCakeSizes(updated);
+      FirestoreService.saveBakeryConfig({ cakeSizes: updated }).catch(() => {});
     } else if (category === 'Add-on') {
       const updated = availableAddons.map((a) => (a === oldValue ? newVal : a));
       setAvailableAddons(updated);
@@ -488,6 +619,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
         setSelectedAddons(selectedAddons.map((a) => (a === oldValue ? newVal : a)));
       }
       await StorageService.saveCakeAddons(updated);
+      FirestoreService.saveBakeryConfig({ cakeAddons: updated }).catch(() => {});
     }
 
     setRenameTarget(null);
@@ -582,11 +714,14 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     triggerHaptic.success();
     onSave({
       id: orderToEdit ? orderToEdit.id : undefined,
+      customerId,
+      courierId,
       customerName: customerName.trim(),
       customerPhone: fullPhone,
       customerInstagram: customerInstagram.trim() || undefined,
       cakeType,
       shape,
+      cakeSize,
       flavor: selectedFlavors.length > 0 ? selectedFlavors : [CAKE_FLAVORS[0]],
       addons: selectedAddons,
       status,
@@ -646,7 +781,56 @@ export const OrderModal: React.FC<OrderModalProps> = ({
           <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
             {/* Section 1: Customer Details */}
             <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Client Details</Text>
+              <View style={styles.titleWithAction}>
+                <Text style={styles.sectionTitle}>Client Details</Text>
+                {savedCustomers.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.repeatSelectBtn}
+                    onPress={() => {
+                      triggerHaptic.selection();
+                      setShowCustomerPicker(!showCustomerPicker);
+                    }}
+                  >
+                    <Ionicons name="people-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                    <Text style={styles.repeatSelectBtnText}>
+                      {showCustomerPicker ? 'Close' : 'Select Repeated Client'}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Saved Customers Quick Selection Chips / Dropdown */}
+              {showCustomerPicker && savedCustomers.length > 0 && (
+                <View style={styles.savedSelectionBox}>
+                  <Text style={styles.savedSelectionTitle}>Tap a repeat customer to autofill details:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 6 }}>
+                    {savedCustomers.map((cust) => (
+                      <TouchableOpacity
+                        key={cust.id}
+                        style={[
+                          styles.savedChip,
+                          customerName.toLowerCase() === cust.name.toLowerCase() && styles.savedChipActive,
+                        ]}
+                        onPress={() => handleSelectCustomer(cust)}
+                      >
+                        <Ionicons name="person-circle-outline" size={14} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                        <Text style={styles.savedChipText}>{cust.name}</Text>
+                        {typeof cust.totalSpent === 'number' && cust.totalSpent > 0 ? (
+                          <View style={styles.spentBadge}>
+                            <Text style={styles.spentBadgeText}>${cust.totalSpent.toFixed(0)}</Text>
+                          </View>
+                        ) : null}
+                        {cust.orderCount && cust.orderCount > 1 ? (
+                          <View style={styles.orderCountBadge}>
+                            <Text style={styles.orderCountBadgeText}>{cust.orderCount}x</Text>
+                          </View>
+                        ) : null}
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+
               <TextInput
                 style={styles.input}
                 placeholder="Customer Full Name (e.g. Sophia Miller)"
@@ -786,7 +970,53 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   <View style={styles.deliveryDetailsHeader}>
                     <Ionicons name="bicycle-outline" size={18} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
                     <Text style={styles.deliveryDetailsTitle}>Courier / Delivery Dispatch Details</Text>
+                    {savedCouriers.length > 0 && (
+                      <TouchableOpacity
+                        style={[styles.repeatSelectBtn, { marginLeft: 'auto' }]}
+                        onPress={() => {
+                          triggerHaptic.selection();
+                          setShowCourierPicker(!showCourierPicker);
+                        }}
+                      >
+                        <Ionicons name="bicycle" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                        <Text style={styles.repeatSelectBtnText}>
+                          {showCourierPicker ? 'Close' : 'Select Driver'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
+
+                  {/* Saved Couriers Quick Selection Chips */}
+                  {showCourierPicker && savedCouriers.length > 0 && (
+                    <View style={styles.savedSelectionBox}>
+                      <Text style={styles.savedSelectionTitle}>Tap a regular delivery courier / company:</Text>
+                      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 6 }}>
+                        {savedCouriers.map((courier) => (
+                          <TouchableOpacity
+                            key={courier.id}
+                            style={[
+                              styles.savedChip,
+                              deliveryPerson.toLowerCase() === courier.name.toLowerCase() && styles.savedChipActive,
+                            ]}
+                            onPress={() => handleSelectCourier(courier)}
+                          >
+                            <Ionicons name="car-outline" size={14} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                            <Text style={styles.savedChipText}>{courier.name}</Text>
+                            {typeof courier.totalEarned === 'number' && courier.totalEarned > 0 ? (
+                              <View style={styles.earnedBadge}>
+                                <Text style={styles.earnedBadgeText}>${courier.totalEarned.toFixed(0)}</Text>
+                              </View>
+                            ) : null}
+                            {courier.deliveryCount && courier.deliveryCount > 1 ? (
+                              <View style={styles.orderCountBadge}>
+                                <Text style={styles.orderCountBadgeText}>{courier.deliveryCount}x</Text>
+                              </View>
+                            ) : null}
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
 
                   {/* 1. Delivery Cost */}
                   <Text style={styles.deliverySubLabel}>Delivery Fee / Cost</Text>
@@ -1385,11 +1615,11 @@ export const OrderModal: React.FC<OrderModalProps> = ({
               </View>
             </View>
 
-            {/* Section 4: Cake Specifications (Type, Shape, Flavor) */}
+            {/* Section 4: Cake Specifications (Type, Shape, Size, Flavor) */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Cake Specifications</Text>
               <Text style={styles.fieldSubtitle}>
-                Tip: Long press on any type, shape, or flavor to rename it
+                Tip: Long press on any type, shape, size, or flavor to rename it
               </Text>
 
               {/* 1. Cake Type */}
@@ -1484,7 +1714,53 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                 ))}
               </ScrollView>
 
-              {/* 3. Flavor & Filling (Multi-select) */}
+              {/* 3. Cake Size */}
+              <View style={styles.titleWithAction}>
+                <Text style={styles.fieldLabel}>Cake Size</Text>
+                <TouchableOpacity
+                  onPress={() => setShowAddSize(!showAddSize)}
+                  style={styles.inlineAddBtn}
+                >
+                  <Ionicons name={showAddSize ? 'close-circle' : 'add-circle'} size={14} color={Theme.colors.deepRose} />
+                  <Text style={styles.inlineAddText}>{showAddSize ? 'Cancel' : 'Add Size'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showAddSize && (
+                <View style={styles.addItemBox}>
+                  <TextInput
+                    style={styles.addItemInput}
+                    placeholder="New size (e.g. Small, 8 inch, XXL)..."
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    value={newSizeInput}
+                    onChangeText={setNewSizeInput}
+                  />
+                  <TouchableOpacity style={styles.addItemSaveBtn} onPress={handleAddNewSize}>
+                    <Text style={styles.addItemSaveText}>Save</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipRow}>
+                {availableSizes.map((sz) => (
+                  <TouchableOpacity
+                    key={sz}
+                    style={[styles.chip, cakeSize === sz && styles.chipActive]}
+                    onPress={() => {
+                      triggerHaptic.selection();
+                      setCakeSize(sz);
+                    }}
+                    onLongPress={() => openRenameModal('Size', sz)}
+                    delayLongPress={450}
+                  >
+                    <Text style={[styles.chipText, cakeSize === sz && styles.chipTextActive]}>
+                      {sz}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {/* 4. Flavor & Filling (Multi-select) */}
               <View style={styles.titleWithAction}>
                 <Text style={styles.fieldLabel}>Flavor & Filling (Multi-select)</Text>
                 <TouchableOpacity
@@ -2074,6 +2350,95 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Theme.colors.textDark,
     paddingVertical: 4,
+  },
+  repeatSelectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF0F3',
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.pastelRose,
+  },
+  repeatSelectBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  savedSelectionBox: {
+    backgroundColor: '#FFF9FA',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FFE0E6',
+    padding: 10,
+    marginBottom: 10,
+  },
+  savedSelectionTitle: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: Theme.colors.textSecondary,
+    marginBottom: 2,
+  },
+  savedChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.white,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    marginRight: 8,
+  },
+  savedChipActive: {
+    borderColor: Theme.colors.deepRose,
+    backgroundColor: '#FFF0F3',
+  },
+  savedChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Theme.colors.textDark,
+  },
+  orderCountBadge: {
+    backgroundColor: Theme.colors.deepRose,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 6,
+  },
+  orderCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
+  spentBadge: {
+    backgroundColor: '#E8F5E9',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 6,
+    borderWidth: 0.5,
+    borderColor: '#C8E6C9',
+  },
+  spentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#2E7D32',
+  },
+  earnedBadge: {
+    backgroundColor: '#FFF3E0',
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    marginLeft: 6,
+    borderWidth: 0.5,
+    borderColor: '#FFE0B2',
+  },
+  earnedBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#E65100',
   },
   countryModalOverlay: {
     flex: 1,

@@ -15,12 +15,15 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { CakeOrder, GeneralRequirement, OrderExpense, ReminderTiming } from '../types';
+import { CakeOrder, GeneralRequirement, OrderExpense, ReminderTiming, SavedCustomer, SavedCourier, BakeryConfig } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const ORDERS_CACHE_KEY = '@sweetbake_orders_cache_v1';
 const REQS_CACHE_KEY = '@sweetbake_reqs_cache_v1';
 const EXPENSES_CACHE_KEY = '@sweetbake_expenses_cache_v1';
+const CUSTOMERS_CACHE_KEY = '@sweetbake_customers_cache_v1';
+const COURIERS_CACHE_KEY = '@sweetbake_couriers_cache_v1';
+const CONFIG_CACHE_KEY = '@sweetbake_config_cache_v1';
 
 /**
  * Helper to normalize Firebase Timestamp or ISO string to ISO string for JS components
@@ -582,5 +585,276 @@ export const FirestoreService = {
     const expenseRef = doc(db, 'expenses', expenseId);
     await deleteDoc(expenseRef);
   },
+
+  /**
+   * Listen to real-time repeated / saved customers
+   */
+  subscribeToCustomers(
+    onSuccess: (customers: SavedCustomer[]) => void,
+    onError?: (err: Error) => void
+  ): () => void {
+    const customersCol = collection(db, 'customers');
+    const q = query(customersCol, orderBy('orderCount', 'desc'), limit(100));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const customers: SavedCustomer[] = [];
+        snapshot.forEach((docSnap) => {
+          const raw = docSnap.data();
+          customers.push({
+            id: docSnap.id,
+            name: raw.name || '',
+            phone: raw.phone || undefined,
+            instagram: raw.instagram || undefined,
+            defaultLocation: raw.defaultLocation || undefined,
+            orderCount: raw.orderCount || 1,
+            totalSpent: typeof raw.totalSpent === 'number' ? raw.totalSpent : undefined,
+            lastOrderId: raw.lastOrderId || undefined,
+            lastOrderDate: raw.lastOrderDate ? toIsoDate(raw.lastOrderDate) : undefined,
+            createdAt: toIsoDate(raw.createdAt),
+            updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          });
+        });
+        AsyncStorage.setItem(CUSTOMERS_CACHE_KEY, JSON.stringify(customers)).catch(() => {});
+        onSuccess(customers);
+      },
+      (error) => {
+        console.warn('Error listening to customers:', error);
+        if (onError) onError(new Error(error.message));
+      }
+    );
+  },
+
+  /**
+   * Fetch repeated / saved customers once
+   */
+  async getCustomers(): Promise<SavedCustomer[]> {
+    try {
+      const customersCol = collection(db, 'customers');
+      const q = query(customersCol, orderBy('orderCount', 'desc'), limit(100));
+      const snapshot = await getDocs(q);
+      const customers: SavedCustomer[] = [];
+      snapshot.forEach((docSnap) => {
+        const raw = docSnap.data();
+        customers.push({
+          id: docSnap.id,
+          name: raw.name || '',
+          phone: raw.phone || undefined,
+          instagram: raw.instagram || undefined,
+          defaultLocation: raw.defaultLocation || undefined,
+          orderCount: raw.orderCount || 1,
+          totalSpent: typeof raw.totalSpent === 'number' ? raw.totalSpent : undefined,
+          lastOrderId: raw.lastOrderId || undefined,
+          lastOrderDate: raw.lastOrderDate ? toIsoDate(raw.lastOrderDate) : undefined,
+          createdAt: toIsoDate(raw.createdAt),
+          updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+        });
+      });
+      AsyncStorage.setItem(CUSTOMERS_CACHE_KEY, JSON.stringify(customers)).catch(() => {});
+      return customers;
+    } catch (err) {
+      console.warn('Failed to fetch customers, using cache:', err);
+      const cached = await AsyncStorage.getItem(CUSTOMERS_CACHE_KEY);
+      return cached ? JSON.parse(cached) : [];
+    }
+  },
+
+  /**
+   * Save or update a customer in `/customers`
+   */
+  async saveCustomer(customer: Partial<SavedCustomer> & { name: string }): Promise<void> {
+    const id = customer.id || `cust-${customer.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const custRef = doc(db, 'customers', id);
+    const dataToSave: Record<string, any> = {
+      id,
+      name: customer.name.trim(),
+      updatedAt: Timestamp.now(),
+    };
+    if (customer.phone) dataToSave.phone = customer.phone.trim();
+    if (customer.instagram) dataToSave.instagram = customer.instagram.trim();
+    if (customer.defaultLocation) dataToSave.defaultLocation = customer.defaultLocation.trim();
+    if (typeof customer.orderCount === 'number') dataToSave.orderCount = customer.orderCount;
+    if (typeof customer.totalSpent === 'number') dataToSave.totalSpent = customer.totalSpent;
+    if (customer.lastOrderId) dataToSave.lastOrderId = customer.lastOrderId;
+    if (customer.lastOrderDate) dataToSave.lastOrderDate = toFirebaseTimestamp(customer.lastOrderDate);
+    if (customer.createdAt) {
+      dataToSave.createdAt = toFirebaseTimestamp(customer.createdAt);
+    } else {
+      dataToSave.createdAt = Timestamp.now();
+    }
+    await setDoc(custRef, dataToSave, { merge: true });
+  },
+
+  /**
+   * Delete a customer from `/customers`
+   */
+  async deleteCustomer(customerId: string): Promise<void> {
+    const custRef = doc(db, 'customers', customerId);
+    await deleteDoc(custRef);
+  },
+
+  /**
+   * Listen to real-time repeated / saved couriers
+   */
+  subscribeToCouriers(
+    onSuccess: (couriers: SavedCourier[]) => void,
+    onError?: (err: Error) => void
+  ): () => void {
+    const couriersCol = collection(db, 'deliveryCouriers');
+    const q = query(couriersCol, orderBy('deliveryCount', 'desc'), limit(100));
+
+    return onSnapshot(
+      q,
+      (snapshot) => {
+        const couriers: SavedCourier[] = [];
+        snapshot.forEach((docSnap) => {
+          const raw = docSnap.data();
+          couriers.push({
+            id: docSnap.id,
+            name: raw.name || '',
+            phone: raw.phone || undefined,
+            deliveryCount: raw.deliveryCount || 1,
+            totalEarned: typeof raw.totalEarned === 'number' ? raw.totalEarned : undefined,
+            lastDeliveryOrderId: raw.lastDeliveryOrderId || undefined,
+            lastDeliveryDate: raw.lastDeliveryDate ? toIsoDate(raw.lastDeliveryDate) : undefined,
+            createdAt: toIsoDate(raw.createdAt),
+            updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+          });
+        });
+        AsyncStorage.setItem(COURIERS_CACHE_KEY, JSON.stringify(couriers)).catch(() => {});
+        onSuccess(couriers);
+      },
+      (error) => {
+        console.warn('Error listening to couriers:', error);
+        if (onError) onError(new Error(error.message));
+      }
+    );
+  },
+
+  /**
+   * Fetch saved delivery couriers once
+   */
+  async getCouriers(): Promise<SavedCourier[]> {
+    try {
+      const couriersCol = collection(db, 'deliveryCouriers');
+      const q = query(couriersCol, orderBy('deliveryCount', 'desc'), limit(100));
+      const snapshot = await getDocs(q);
+      const couriers: SavedCourier[] = [];
+      snapshot.forEach((docSnap) => {
+        const raw = docSnap.data();
+        couriers.push({
+          id: docSnap.id,
+          name: raw.name || '',
+          phone: raw.phone || undefined,
+          deliveryCount: raw.deliveryCount || 1,
+          totalEarned: typeof raw.totalEarned === 'number' ? raw.totalEarned : undefined,
+          lastDeliveryOrderId: raw.lastDeliveryOrderId || undefined,
+          lastDeliveryDate: raw.lastDeliveryDate ? toIsoDate(raw.lastDeliveryDate) : undefined,
+          createdAt: toIsoDate(raw.createdAt),
+          updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+        });
+      });
+      AsyncStorage.setItem(COURIERS_CACHE_KEY, JSON.stringify(couriers)).catch(() => {});
+      return couriers;
+    } catch (err) {
+      console.warn('Failed to fetch couriers, using cache:', err);
+      const cached = await AsyncStorage.getItem(COURIERS_CACHE_KEY);
+      return cached ? JSON.parse(cached) : [];
+    }
+  },
+
+  /**
+   * Save or update a courier in `/deliveryCouriers`
+   */
+  async saveCourier(courier: Partial<SavedCourier> & { name: string }): Promise<void> {
+    const id = courier.id || `courier-${courier.name.trim().toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+    const courierRef = doc(db, 'deliveryCouriers', id);
+    const dataToSave: Record<string, any> = {
+      id,
+      name: courier.name.trim(),
+      updatedAt: Timestamp.now(),
+    };
+    if (courier.phone) dataToSave.phone = courier.phone.trim();
+    if (typeof courier.deliveryCount === 'number') dataToSave.deliveryCount = courier.deliveryCount;
+    if (typeof courier.totalEarned === 'number') dataToSave.totalEarned = courier.totalEarned;
+    if (courier.lastDeliveryOrderId) dataToSave.lastDeliveryOrderId = courier.lastDeliveryOrderId;
+    if (courier.lastDeliveryDate) dataToSave.lastDeliveryDate = toFirebaseTimestamp(courier.lastDeliveryDate);
+    if (courier.createdAt) {
+      dataToSave.createdAt = toFirebaseTimestamp(courier.createdAt);
+    } else {
+      dataToSave.createdAt = Timestamp.now();
+    }
+    await setDoc(courierRef, dataToSave, { merge: true });
+  },
+
+  /**
+   * Delete a courier from `/deliveryCouriers`
+   */
+  async deleteCourier(courierId: string): Promise<void> {
+    const courierRef = doc(db, 'deliveryCouriers', courierId);
+    await deleteDoc(courierRef);
+  },
+
+  /**
+   * Fetch bakery configuration options (flavors, types, shapes, sizes, addons)
+   */
+  async getBakeryConfig(): Promise<BakeryConfig | null> {
+    try {
+      const configRef = doc(db, 'config', 'bakeryOptions');
+      const snapshot = await getDocs(query(collection(db, 'config'), limit(10)));
+      const docSnap = snapshot.docs.find(d => d.id === 'bakeryOptions');
+      if (docSnap && docSnap.exists()) {
+        const raw = docSnap.data();
+        const config: BakeryConfig = {
+          cakeTypes: Array.isArray(raw.cakeTypes) ? raw.cakeTypes : undefined,
+          cakeShapes: Array.isArray(raw.cakeShapes) ? raw.cakeShapes : undefined,
+          cakeSizes: Array.isArray(raw.cakeSizes) ? raw.cakeSizes : undefined,
+          cakeFlavors: Array.isArray(raw.cakeFlavors) ? raw.cakeFlavors : undefined,
+          cakeAddons: Array.isArray(raw.cakeAddons) ? raw.cakeAddons : undefined,
+          updatedAt: raw.updatedAt ? toIsoDate(raw.updatedAt) : undefined,
+        };
+        await AsyncStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(config));
+        return config;
+      }
+      return null;
+    } catch (err) {
+      console.warn('Failed to fetch bakery config from Firestore, attempting cache:', err);
+      try {
+        const cached = await AsyncStorage.getItem(CONFIG_CACHE_KEY);
+        return cached ? JSON.parse(cached) : null;
+      } catch {
+        return null;
+      }
+    }
+  },
+
+  /**
+   * Save or update bakery configuration options in Firestore
+   */
+  async saveBakeryConfig(config: Partial<BakeryConfig>): Promise<void> {
+    try {
+      const configRef = doc(db, 'config', 'bakeryOptions');
+      const dataToSave: Record<string, any> = {
+        updatedAt: Timestamp.now(),
+      };
+      if (Array.isArray(config.cakeTypes)) dataToSave.cakeTypes = config.cakeTypes;
+      if (Array.isArray(config.cakeShapes)) dataToSave.cakeShapes = config.cakeShapes;
+      if (Array.isArray(config.cakeSizes)) dataToSave.cakeSizes = config.cakeSizes;
+      if (Array.isArray(config.cakeFlavors)) dataToSave.cakeFlavors = config.cakeFlavors;
+      if (Array.isArray(config.cakeAddons)) dataToSave.cakeAddons = config.cakeAddons;
+
+      await setDoc(configRef, dataToSave, { merge: true });
+
+      // Update local cache
+      const cached = await AsyncStorage.getItem(CONFIG_CACHE_KEY);
+      const existing = cached ? JSON.parse(cached) : {};
+      const merged = { ...existing, ...config, updatedAt: new Date().toISOString() };
+      await AsyncStorage.setItem(CONFIG_CACHE_KEY, JSON.stringify(merged));
+    } catch (err) {
+      console.warn('Failed to save bakery config to Firestore:', err);
+    }
+  },
 };
+
 

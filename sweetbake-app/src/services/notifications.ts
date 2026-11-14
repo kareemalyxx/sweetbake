@@ -51,6 +51,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
+    cakeSize?: string;
     flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
@@ -72,11 +73,13 @@ export const NotificationService = {
       ? (order.flavor.length > 0 ? order.flavor.join(', ') : 'Custom')
       : (order.flavor || 'Custom');
 
+    const sizePart = order.cakeSize ? ` • Size: ${order.cakeSize}` : '';
+
     const lines = [
       `🎂 *Kake Order Update*`,
       `Hi ${order.customerName}! Here are the details for your custom cake commission:`,
       ``,
-      `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'} • ${flavorDisplay})`,
+      `🍰 *Cake:* ${order.cakeType || 'Custom Cake'} (${order.shape || 'Standard'}${sizePart} • ${flavorDisplay})`,
       `📅 *Schedule:* ${formattedDate}`,
     ];
 
@@ -122,6 +125,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
+    cakeSize?: string;
     flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
@@ -148,6 +152,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
+    cakeSize?: string;
     flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;
@@ -247,6 +252,7 @@ export const NotificationService = {
     deliveryDate: string;
     cakeType?: string;
     shape?: string;
+    cakeSize?: string;
     flavor?: string | string[];
     fulfillmentType?: string;
     location?: string;

@@ -40,8 +40,8 @@ public struct OrderRowView: View {
                         .foregroundColor(Theme.Colors.deepRose)
                 }
                 
-                // Subtitle: Cake Type & Shape
-                Text("\(order.cakeType) • \(order.shape)")
+                // Subtitle: Cake Type, Shape & Size
+                Text("\(order.cakeType) • \(order.shape) (\(order.cakeSize))")
                     .font(.subheadline)
                     .foregroundColor(Color(UIColor.secondaryLabel))
                     .lineLimit(1)
