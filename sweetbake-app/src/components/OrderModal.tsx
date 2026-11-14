@@ -138,6 +138,18 @@ export const OrderModal: React.FC<OrderModalProps> = ({
   const [showCustomerPicker, setShowCustomerPicker] = useState(false);
   const [showCourierPicker, setShowCourierPicker] = useState(false);
 
+  // Quick-Add Customer state
+  const [showQuickAddCustomer, setShowQuickAddCustomer] = useState(false);
+  const [quickCustName, setQuickCustName] = useState('');
+  const [quickCustPhone, setQuickCustPhone] = useState('');
+  const [quickCustInstagram, setQuickCustInstagram] = useState('');
+  const [quickCustLocation, setQuickCustLocation] = useState('');
+
+  // Quick-Add Courier state
+  const [showQuickAddCourier, setShowQuickAddCourier] = useState(false);
+  const [quickCourierName, setQuickCourierName] = useState('');
+  const [quickCourierPhone, setQuickCourierPhone] = useState('');
+
   // Rename modal states
   const [renameTarget, setRenameTarget] = useState<{
     category: 'Type' | 'Shape' | 'Size' | 'Flavor' | 'Add-on';
@@ -567,6 +579,66 @@ export const OrderModal: React.FC<OrderModalProps> = ({
     setShowCourierPicker(false);
   };
 
+  const handleSaveQuickCustomer = async () => {
+    const trimmedName = quickCustName.trim();
+    if (!trimmedName) {
+      Alert.alert('Required', 'Please enter customer name.');
+      return;
+    }
+    triggerHaptic.success();
+    const newCust: SavedCustomer = {
+      id: `cust-${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${Date.now().toString(36)}`,
+      name: trimmedName,
+      phone: quickCustPhone.trim() || undefined,
+      instagram: quickCustInstagram.trim() || undefined,
+      defaultLocation: quickCustLocation.trim() || undefined,
+      orderCount: 1,
+      totalSpent: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [newCust, ...savedCustomers.filter((c) => c.name.toLowerCase() !== trimmedName.toLowerCase())];
+    setSavedCustomers(updated);
+    await StorageService.saveCustomers(updated);
+    FirestoreService.saveCustomer(newCust).catch(() => {});
+
+    // Autofill into current order form
+    handleSelectCustomer(newCust);
+    setQuickCustName('');
+    setQuickCustPhone('');
+    setQuickCustInstagram('');
+    setQuickCustLocation('');
+    setShowQuickAddCustomer(false);
+  };
+
+  const handleSaveQuickCourier = async () => {
+    const trimmedName = quickCourierName.trim();
+    if (!trimmedName) {
+      Alert.alert('Required', 'Please enter delivery person or company name.');
+      return;
+    }
+    triggerHaptic.success();
+    const newCourier: SavedCourier = {
+      id: `courier-${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${Date.now().toString(36)}`,
+      name: trimmedName,
+      phone: quickCourierPhone.trim() || undefined,
+      deliveryCount: 1,
+      totalEarned: 0,
+      createdAt: new Date().toISOString(),
+    };
+
+    const updated = [newCourier, ...savedCouriers.filter((c) => c.name.toLowerCase() !== trimmedName.toLowerCase())];
+    setSavedCouriers(updated);
+    await StorageService.saveCouriers(updated);
+    FirestoreService.saveCourier(newCourier).catch(() => {});
+
+    // Autofill into current delivery form
+    handleSelectCourier(newCourier);
+    setQuickCourierName('');
+    setQuickCourierPhone('');
+    setShowQuickAddCourier(false);
+  };
+
   // Open Rename dialog on long press
   const openRenameModal = (category: 'Type' | 'Shape' | 'Size' | 'Flavor' | 'Add-on', value: string) => {
     triggerHaptic.heavy();
@@ -783,21 +855,87 @@ export const OrderModal: React.FC<OrderModalProps> = ({
             <View style={styles.section}>
               <View style={styles.titleWithAction}>
                 <Text style={styles.sectionTitle}>Client Details</Text>
-                {savedCustomers.length > 0 && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <TouchableOpacity
-                    style={styles.repeatSelectBtn}
+                    style={styles.quickAddHeaderBtn}
                     onPress={() => {
                       triggerHaptic.selection();
-                      setShowCustomerPicker(!showCustomerPicker);
+                      setShowQuickAddCustomer(!showQuickAddCustomer);
+                      if (!showQuickAddCustomer) setShowCustomerPicker(false);
                     }}
                   >
-                    <Ionicons name="people-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
-                    <Text style={styles.repeatSelectBtnText}>
-                      {showCustomerPicker ? 'Close' : 'Select Repeated Client'}
+                    <Ionicons
+                      name={showQuickAddCustomer ? 'close-circle' : 'person-add'}
+                      size={13}
+                      color={Theme.colors.deepRose}
+                      style={{ marginRight: 3 }}
+                    />
+                    <Text style={styles.quickAddHeaderBtnText}>
+                      {showQuickAddCustomer ? 'Cancel' : '+ New Client'}
                     </Text>
                   </TouchableOpacity>
-                )}
+
+                  {savedCustomers.length > 0 && (
+                    <TouchableOpacity
+                      style={styles.repeatSelectBtn}
+                      onPress={() => {
+                        triggerHaptic.selection();
+                        setShowCustomerPicker(!showCustomerPicker);
+                        if (!showCustomerPicker) setShowQuickAddCustomer(false);
+                      }}
+                    >
+                      <Ionicons name="people-outline" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                      <Text style={styles.repeatSelectBtnText}>
+                        {showCustomerPicker ? 'Close' : `Saved (${savedCustomers.length})`}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
+
+              {/* Inline Quick Add Customer Form */}
+              {showQuickAddCustomer && (
+                <View style={styles.quickAddFormCard}>
+                  <View style={styles.quickAddFormHeader}>
+                    <Ionicons name="sparkles" size={14} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                    <Text style={styles.quickAddFormTitle}>Save New Repeated Customer</Text>
+                  </View>
+                  <TextInput
+                    style={styles.quickAddInput}
+                    placeholder="Customer Name (e.g. Sarah Connor)"
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    value={quickCustName}
+                    onChangeText={setQuickCustName}
+                  />
+                  <TextInput
+                    style={styles.quickAddInput}
+                    placeholder="WhatsApp Phone (e.g. +1 555-0199)"
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    keyboardType="phone-pad"
+                    value={quickCustPhone}
+                    onChangeText={setQuickCustPhone}
+                  />
+                  <TextInput
+                    style={styles.quickAddInput}
+                    placeholder="Instagram handle/link (e.g. @sarah_cakes)"
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    autoCapitalize="none"
+                    value={quickCustInstagram}
+                    onChangeText={setQuickCustInstagram}
+                  />
+                  <TextInput
+                    style={styles.quickAddInput}
+                    placeholder="Default Address / Notes"
+                    placeholderTextColor={Theme.colors.textSecondary}
+                    value={quickCustLocation}
+                    onChangeText={setQuickCustLocation}
+                  />
+                  <TouchableOpacity style={styles.quickAddSaveBtn} onPress={handleSaveQuickCustomer}>
+                    <Ionicons name="save-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                    <Text style={styles.quickAddSaveBtnText}>Save & Autofill Customer</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               {/* Saved Customers Quick Selection Chips / Dropdown */}
               {showCustomerPicker && savedCustomers.length > 0 && (
@@ -970,21 +1108,72 @@ export const OrderModal: React.FC<OrderModalProps> = ({
                   <View style={styles.deliveryDetailsHeader}>
                     <Ionicons name="bicycle-outline" size={18} color={Theme.colors.deepRose} style={{ marginRight: 6 }} />
                     <Text style={styles.deliveryDetailsTitle}>Courier / Delivery Dispatch Details</Text>
-                    {savedCouriers.length > 0 && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 'auto' }}>
                       <TouchableOpacity
-                        style={[styles.repeatSelectBtn, { marginLeft: 'auto' }]}
+                        style={styles.quickAddHeaderBtn}
                         onPress={() => {
                           triggerHaptic.selection();
-                          setShowCourierPicker(!showCourierPicker);
+                          setShowQuickAddCourier(!showQuickAddCourier);
+                          if (!showQuickAddCourier) setShowCourierPicker(false);
                         }}
                       >
-                        <Ionicons name="bicycle" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
-                        <Text style={styles.repeatSelectBtnText}>
-                          {showCourierPicker ? 'Close' : 'Select Driver'}
+                        <Ionicons
+                          name={showQuickAddCourier ? 'close-circle' : 'person-add'}
+                          size={13}
+                          color={Theme.colors.deepRose}
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text style={styles.quickAddHeaderBtnText}>
+                          {showQuickAddCourier ? 'Cancel' : '+ New Driver'}
                         </Text>
                       </TouchableOpacity>
-                    )}
+
+                      {savedCouriers.length > 0 && (
+                        <TouchableOpacity
+                          style={styles.repeatSelectBtn}
+                          onPress={() => {
+                            triggerHaptic.selection();
+                            setShowCourierPicker(!showCourierPicker);
+                            if (!showCourierPicker) setShowQuickAddCourier(false);
+                          }}
+                        >
+                          <Ionicons name="bicycle" size={13} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                          <Text style={styles.repeatSelectBtnText}>
+                            {showCourierPicker ? 'Close' : `Drivers (${savedCouriers.length})`}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
+
+                  {/* Inline Quick Add Courier Form */}
+                  {showQuickAddCourier && (
+                    <View style={styles.quickAddFormCard}>
+                      <View style={styles.quickAddFormHeader}>
+                        <Ionicons name="sparkles" size={14} color={Theme.colors.deepRose} style={{ marginRight: 4 }} />
+                        <Text style={styles.quickAddFormTitle}>Save New Delivery Driver / Company</Text>
+                      </View>
+                      <TextInput
+                        style={styles.quickAddInput}
+                        placeholder="Driver / Company Name (e.g. Alex Express)"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        value={quickCourierName}
+                        onChangeText={setQuickCourierName}
+                      />
+                      <TextInput
+                        style={styles.quickAddInput}
+                        placeholder="Phone Number (e.g. +1 555-0144)"
+                        placeholderTextColor={Theme.colors.textSecondary}
+                        keyboardType="phone-pad"
+                        value={quickCourierPhone}
+                        onChangeText={setQuickCourierPhone}
+                      />
+                      <TouchableOpacity style={styles.quickAddSaveBtn} onPress={handleSaveQuickCourier}>
+                        <Ionicons name="save-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.quickAddSaveBtnText}>Save & Select Driver</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
 
                   {/* Saved Couriers Quick Selection Chips */}
                   {showCourierPicker && savedCouriers.length > 0 && (
@@ -2365,6 +2554,64 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: Theme.colors.deepRose,
+  },
+  quickAddHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Theme.colors.warmIvory,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E8DED2',
+  },
+  quickAddHeaderBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: Theme.colors.deepRose,
+  },
+  quickAddFormCard: {
+    backgroundColor: '#FFFBF5',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#F3E5D8',
+    padding: 12,
+    marginBottom: 12,
+  },
+  quickAddFormHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  quickAddFormTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Theme.colors.textDark,
+  },
+  quickAddInput: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Theme.colors.border,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    fontSize: 13,
+    color: Theme.colors.textDark,
+    marginBottom: 8,
+  },
+  quickAddSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: Theme.colors.deepRose,
+    borderRadius: 8,
+    paddingVertical: 9,
+    marginTop: 2,
+  },
+  quickAddSaveBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   savedSelectionBox: {
     backgroundColor: '#FFF9FA',

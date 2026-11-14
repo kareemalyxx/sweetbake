@@ -12,7 +12,7 @@ import {
   Animated,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus, OrderExpense } from './src/types';
+import { CakeOrder, GeneralRequirement, RequirementCategory, OrderStatus, OrderExpense, SavedCustomer, SavedCourier } from './src/types';
 import { StorageService } from './src/services/storage';
 import { NotificationService, InAppNotification } from './src/services/notifications';
 import { AuthService } from './src/services/auth';
@@ -27,12 +27,15 @@ import { DashboardScreen } from './src/screens/DashboardScreen';
 import { CalendarScreen } from './src/screens/CalendarScreen';
 import { BusinessNeedsScreen } from './src/screens/BusinessNeedsScreen';
 import { FinancialSheetScreen } from './src/screens/FinancialSheetScreen';
+import { DirectoryScreen } from './src/screens/DirectoryScreen';
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Finances' | 'Checklist'>('Orders');
+  const [activeTab, setActiveTab] = useState<'Orders' | 'Schedule' | 'Finances' | 'Checklist' | 'Directory'>('Orders');
   const [orders, setOrders] = useState<CakeOrder[]>([]);
   const [requirements, setRequirements] = useState<GeneralRequirement[]>([]);
   const [expenses, setExpenses] = useState<OrderExpense[]>([]);
+  const [customers, setCustomers] = useState<SavedCustomer[]>([]);
+  const [couriers, setCouriers] = useState<SavedCourier[]>([]);
 
   // In-App Notification Center
   const [dueNotifications, setDueNotifications] = useState<InAppNotification[]>([]);
@@ -102,6 +105,26 @@ export default function App() {
       (err) => console.warn('Firestore expenses sync notice:', err.message)
     );
 
+    const unsubscribeCustomers = FirestoreService.subscribeToCustomers(
+      (cloudCusts) => {
+        if (cloudCusts) {
+          setCustomers(cloudCusts);
+          StorageService.saveCustomers(cloudCusts).catch(() => { });
+        }
+      },
+      (err) => console.warn('Firestore customers sync notice:', err.message)
+    );
+
+    const unsubscribeCouriers = FirestoreService.subscribeToCouriers(
+      (cloudCouriers) => {
+        if (cloudCouriers) {
+          setCouriers(cloudCouriers);
+          StorageService.saveCouriers(cloudCouriers).catch(() => { });
+        }
+      },
+      (err) => console.warn('Firestore couriers sync notice:', err.message)
+    );
+
     checkReminders();
     const interval = setInterval(checkReminders, 20000); // Check every 20 seconds
     return () => {
@@ -109,6 +132,8 @@ export default function App() {
       unsubscribeOrders();
       unsubscribeReqs();
       unsubscribeExpenses();
+      unsubscribeCustomers();
+      unsubscribeCouriers();
     };
   }, []);
 
@@ -116,10 +141,18 @@ export default function App() {
     const fetchedOrders = await StorageService.getOrders();
     const fetchedReqs = await StorageService.getRequirements();
     const fetchedExpenses = await StorageService.getExpenses();
+    const fetchedCustomers = await StorageService.getCustomers();
+    const fetchedCouriers = await StorageService.getCouriers();
     setOrders(fetchedOrders);
     setRequirements(fetchedReqs);
     if (fetchedExpenses && fetchedExpenses.length > 0) {
       setExpenses(fetchedExpenses);
+    }
+    if (fetchedCustomers && fetchedCustomers.length > 0) {
+      setCustomers(fetchedCustomers);
+    }
+    if (fetchedCouriers && fetchedCouriers.length > 0) {
+      setCouriers(fetchedCouriers);
     }
   };
 
@@ -212,17 +245,20 @@ export default function App() {
         }
 
         // Auto-save or update customer in Firestore /customers with last order linkage & total spent calculation
+        // NOTE: Only orders with status === 'Delivered' count towards orderCount and totalSpent
         if (orderToSave.customerName && orderToSave.customerName.trim() && orderToSave.customerName.trim() !== 'Anonymous') {
           const custName = orderToSave.customerName.trim();
           FirestoreService.getCustomers().then((existingCusts) => {
             const found = existingCusts.find(
               (c) => c.name.toLowerCase() === custName.toLowerCase()
             );
-            const orderCount = (found?.orderCount || 0) + (orderData.id ? 0 : 1);
-            // Calculate total spent by customer across all orders
-            const totalSpent = updatedOrders
-              .filter((o) => (o.customerName || '').trim().toLowerCase() === custName.toLowerCase())
-              .reduce((sum, o) => sum + (o.quotedPrice || 0), 0);
+            const completedCustomerOrders = updatedOrders.filter(
+              (o) =>
+                (o.customerName || '').trim().toLowerCase() === custName.toLowerCase() &&
+                o.status === 'Delivered'
+            );
+            const orderCount = completedCustomerOrders.length;
+            const totalSpent = completedCustomerOrders.reduce((sum, o) => sum + (o.quotedPrice || 0), 0);
 
             FirestoreService.saveCustomer({
               id: found?.id,
@@ -230,7 +266,7 @@ export default function App() {
               phone: orderToSave.customerPhone || found?.phone,
               instagram: orderToSave.customerInstagram || found?.instagram,
               defaultLocation: orderToSave.location || found?.defaultLocation,
-              orderCount: Math.max(1, orderCount),
+              orderCount,
               totalSpent,
               lastOrderId: targetOrderId,
               lastOrderDate: orderToSave.deliveryDate || new Date().toISOString(),
@@ -239,27 +275,30 @@ export default function App() {
         }
 
         // Auto-save or update courier in Firestore /deliveryCouriers with last delivery order linkage & total earned
+        // NOTE: Only orders with status === 'Delivered' count towards deliveryCount and totalEarned
         if (orderToSave.fulfillmentType === 'Delivery' && orderToSave.deliveryPerson && orderToSave.deliveryPerson.trim()) {
           const courierName = orderToSave.deliveryPerson.trim();
           FirestoreService.getCouriers().then((existingCouriers) => {
             const found = existingCouriers.find(
               (c) => c.name.toLowerCase() === courierName.toLowerCase()
             );
-            const deliveryCount = (found?.deliveryCount || 0) + (orderData.id ? 0 : 1);
-            // Calculate total delivery fees paid to this courier across all delivery orders
-            const totalEarned = updatedOrders
-              .filter(
-                (o) =>
-                  o.fulfillmentType === 'Delivery' &&
-                  (o.deliveryPerson || '').trim().toLowerCase() === courierName.toLowerCase()
-              )
-              .reduce((sum, o) => sum + (typeof o.deliveryCost === 'number' ? o.deliveryCost : 0), 0);
+            const completedCourierOrders = updatedOrders.filter(
+              (o) =>
+                o.fulfillmentType === 'Delivery' &&
+                (o.deliveryPerson || '').trim().toLowerCase() === courierName.toLowerCase() &&
+                o.status === 'Delivered'
+            );
+            const deliveryCount = completedCourierOrders.length;
+            const totalEarned = completedCourierOrders.reduce(
+              (sum, o) => sum + (typeof o.deliveryCost === 'number' ? o.deliveryCost : 0),
+              0
+            );
 
             FirestoreService.saveCourier({
               id: found?.id,
               name: courierName,
               phone: orderToSave.deliveryPhone || found?.phone,
-              deliveryCount: Math.max(1, deliveryCount),
+              deliveryCount,
               totalEarned,
               lastDeliveryOrderId: targetOrderId,
               lastDeliveryDate: orderToSave.deliveryDate || new Date().toISOString(),
@@ -396,13 +435,6 @@ export default function App() {
     setOrders(updated);
     await StorageService.saveOrders(updated);
 
-    const advanced = updated.find((o) => o.id === id);
-    if (advanced) {
-      FirestoreService.saveOrder(advanced).catch((e) =>
-        console.warn('Failed to update status in Firestore:', e)
-      );
-    }
-
     // Cancel notifications linked to this order
     await NotificationService.cancelOrderReminder(id);
     await checkReminders();
@@ -448,10 +480,81 @@ export default function App() {
       FirestoreService.saveOrder(advanced).catch((e) =>
         console.warn('Failed to update status in Firestore:', e)
       );
+
+      // If the order was just advanced to Delivered, update customer and courier completed stats
+      if (advanced.status === 'Delivered') {
+        if (advanced.customerName && advanced.customerName.trim() && advanced.customerName.trim() !== 'Anonymous') {
+          const custName = advanced.customerName.trim();
+          FirestoreService.getCustomers().then((existingCusts) => {
+            const found = existingCusts.find((c) => c.name.toLowerCase() === custName.toLowerCase());
+            const completedCustomerOrders = updated.filter(
+              (o) => (o.customerName || '').trim().toLowerCase() === custName.toLowerCase() && o.status === 'Delivered'
+            );
+            FirestoreService.saveCustomer({
+              id: found?.id,
+              name: custName,
+              orderCount: completedCustomerOrders.length,
+              totalSpent: completedCustomerOrders.reduce((sum, o) => sum + (o.quotedPrice || 0), 0),
+              lastOrderId: advanced.id,
+              lastOrderDate: advanced.deliveryDate || new Date().toISOString(),
+            }).catch(() => {});
+          }).catch(() => {});
+        }
+
+        if (advanced.fulfillmentType === 'Delivery' && advanced.deliveryPerson && advanced.deliveryPerson.trim()) {
+          const courierName = advanced.deliveryPerson.trim();
+          FirestoreService.getCouriers().then((existingCouriers) => {
+            const found = existingCouriers.find((c) => c.name.toLowerCase() === courierName.toLowerCase());
+            const completedCourierOrders = updated.filter(
+              (o) =>
+                o.fulfillmentType === 'Delivery' &&
+                (o.deliveryPerson || '').trim().toLowerCase() === courierName.toLowerCase() &&
+                o.status === 'Delivered'
+            );
+            FirestoreService.saveCourier({
+              id: found?.id,
+              name: courierName,
+              deliveryCount: completedCourierOrders.length,
+              totalEarned: completedCourierOrders.reduce(
+                (sum, o) => sum + (typeof o.deliveryCost === 'number' ? o.deliveryCost : 0),
+                0
+              ),
+              lastDeliveryOrderId: advanced.id,
+              lastDeliveryDate: advanced.deliveryDate || new Date().toISOString(),
+            }).catch(() => {});
+          }).catch(() => {});
+        }
+      }
     }
   };
 
-    // Requirements State Handlers - strictly targets ONLY the exact item matching id
+    const handleAddCustomerDirect = async (custData: Partial<SavedCustomer> & { name: string }) => {
+    await FirestoreService.saveCustomer(custData);
+    const updated = await FirestoreService.getCustomers();
+    setCustomers(updated);
+    StorageService.saveCustomers(updated).catch(() => {});
+  };
+
+  const handleAddCourierDirect = async (courierData: Partial<SavedCourier> & { name: string }) => {
+    await FirestoreService.saveCourier(courierData);
+    const updated = await FirestoreService.getCouriers();
+    setCouriers(updated);
+    StorageService.saveCouriers(updated).catch(() => {});
+  };
+
+  const handleDeleteCustomerDirect = async (id: string) => {
+    await FirestoreService.deleteCustomer(id);
+    const updated = customers.filter((c) => c.id !== id);
+    setCustomers(updated);
+    StorageService.saveCustomers(updated).catch(() => {});
+  };
+
+  const handleDeleteCourierDirect = async (id: string) => {
+    await FirestoreService.deleteCourier(id);
+    const updated = couriers.filter((cr) => cr.id !== id);
+    setCouriers(updated);
+    StorageService.saveCouriers(updated).catch(() => {});
+  };
   const handleToggleRequirement = async (id: string, expenseAmount?: number) => {
     const target = requirements.find((r) => r.id === id || r.reqId === id);
     if (!target) return;
@@ -780,6 +883,7 @@ export default function App() {
             onSaveOrder={handleSaveOrder}
             onDeleteOrder={handleDeleteOrder}
             onAdvanceStatus={handleAdvanceStatus}
+            onOpenDirectory={() => setActiveTab('Directory')}
           />
         )}
         {activeTab === 'Schedule' && (
@@ -806,6 +910,17 @@ export default function App() {
             onAddRequirement={handleAddRequirement}
             onDeleteRequirement={handleDeleteRequirement}
             onClearCompleted={handleClearCompleted}
+          />
+        )}
+        {activeTab === 'Directory' && (
+          <DirectoryScreen
+            customers={customers}
+            couriers={couriers}
+            orders={orders}
+            onAddCustomer={handleAddCustomerDirect}
+            onAddCourier={handleAddCourierDirect}
+            onDeleteCustomer={handleDeleteCustomerDirect}
+            onDeleteCourier={handleDeleteCourierDirect}
           />
         )}
       </View>
@@ -937,6 +1052,36 @@ export default function App() {
             ]}
           >
             Checklist
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.tabItem}
+          onPress={() => {
+            triggerHaptic.selection();
+            setActiveTab('Directory');
+          }}
+        >
+          <Ionicons
+            name={activeTab === 'Directory' ? 'people' : 'people-outline'}
+            size={22}
+            color={
+              activeTab === 'Directory'
+                ? Theme.colors.deepRose
+                : Theme.colors.textSecondary
+            }
+          />
+          <Text
+            style={[
+              styles.tabLabel,
+              { color: Theme.colors.textSecondary },
+              activeTab === 'Directory' && {
+                color: Theme.colors.deepRose,
+                fontWeight: '800',
+              },
+            ]}
+          >
+            Clients
           </Text>
         </TouchableOpacity>
       </View>

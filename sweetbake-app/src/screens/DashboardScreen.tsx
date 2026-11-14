@@ -24,6 +24,7 @@ interface DashboardScreenProps {
   onSaveOrder: (order: Partial<CakeOrder>) => void;
   onDeleteOrder: (id: string) => void;
   onAdvanceStatus: (id: string) => void;
+  onOpenDirectory?: () => void;
 }
 
 export const DashboardScreen: React.FC<DashboardScreenProps> = ({
@@ -31,6 +32,7 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
   onSaveOrder,
   onDeleteOrder,
   onAdvanceStatus,
+  onOpenDirectory,
 }) => {
   const [search, setSearch] = useState('');
   const [selectedFilter, setSelectedFilter] = useState<OrderStatus | 'All'>('All');
@@ -109,6 +111,17 @@ export const DashboardScreen: React.FC<DashboardScreenProps> = ({
         {search.length > 0 && (
           <TouchableOpacity onPress={() => setSearch('')}>
             <Ionicons name="close-circle" size={16} color={Theme.colors.textSecondary} />
+          </TouchableOpacity>
+        )}
+        {onOpenDirectory && (
+          <TouchableOpacity
+            style={styles.directoryIconBtn}
+            onPress={() => {
+              triggerHaptic.selection();
+              onOpenDirectory();
+            }}
+          >
+            <Ionicons name="people-outline" size={18} color={Theme.colors.deepRose} />
           </TouchableOpacity>
         )}
       </View>
@@ -234,6 +247,14 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 14,
     color: Theme.colors.textDark,
+  },
+  directoryIconBtn: {
+    marginLeft: 8,
+    padding: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFF0F3',
+    borderWidth: 1,
+    borderColor: Theme.colors.pastelRose,
   },
   filterScroll: {
     paddingHorizontal: 16,
