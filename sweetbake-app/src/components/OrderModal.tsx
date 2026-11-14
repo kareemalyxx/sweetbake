@@ -592,7 +592,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       phone: quickCustPhone.trim() || undefined,
       instagram: quickCustInstagram.trim() || undefined,
       defaultLocation: quickCustLocation.trim() || undefined,
-      orderCount: 1,
+      orderCount: 0,
       totalSpent: 0,
       createdAt: new Date().toISOString(),
     };
@@ -622,7 +622,7 @@ export const OrderModal: React.FC<OrderModalProps> = ({
       id: `courier-${trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '_')}-${Date.now().toString(36)}`,
       name: trimmedName,
       phone: quickCourierPhone.trim() || undefined,
-      deliveryCount: 1,
+      deliveryCount: 0,
       totalEarned: 0,
       createdAt: new Date().toISOString(),
     };
